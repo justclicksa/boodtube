@@ -1,0 +1,409 @@
+{
+  "@@locale": "ar",
+  "appTitle": "سمارت تيوب",
+  "homeTab": "الرئيسية",
+  "searchTab": "البحث",
+  "subscriptionsTab": "الاشتراكات",
+  "libraryTab": "المكتبة",
+  "settingsTab": "الإعدادات",
+  "playVideo": "تشغيل",
+  "pauseVideo": "إيقاف مؤقت",
+  "skipForward": "تقديم 15 ثانية",
+  "skipBackward": "إرجاع 5 ثوانٍ",
+  "skipSponsor": "تخطي الإعلان",
+  "qualityLowest": "الأدنى (144p)",
+  "qualityLow": "منخفضة (240p)",
+  "qualityMedium": "متوسطة (480p)",
+  "qualityHigh": "عالية (720p)",
+  "qualityHighest": "الأعلى (1080p فأكثر)",
+  "qualityBest": "أفضل جودة متاحة",
+  "qualityAuto": "تلقائي",
+  "speedLabel": "{speed}x",
+  "@speedLabel": {
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
+  "errorNetwork": "لا يوجد اتصال بالإنترنت",
+  "errorUnknown": "حدث خطأ ما",
+  "retry": "إعادة المحاولة",
+  "versionLabel": "الإصدار {version}",
+  "@versionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "noResults": "لا توجد نتائج",
+  "noHistory": "لا يوجد سجل مشاهدة",
+  "noFavorites": "لا توجد مفضلات بعد",
+  "noWatchLater": "قائمة المشاهدة لاحقًا فارغة",
+  "noSubscriptions": "لا توجد اشتراكات بعد",
+  "emptyHistorySubtitle": "ستظهر هنا المقاطع التي تشاهدها",
+  "emptyFavoritesSubtitle": "اضغط أيقونة القلب على أي مقطع لإضافته هنا",
+  "emptyWatchLaterSubtitle": "احفظ المقاطع لمشاهدتها لاحقًا",
+  "emptySubscriptionsSubtitle": "اشترك في القنوات لتظهر أحدث مقاطعها هنا",
+  "findChannels": "ابحث عن قنوات",
+  "darkMode": "الوضع الداكن",
+  "language": "اللغة",
+  "notifications": "الإشعارات",
+  "generalSection": "عام",
+  "playerSection": "المشغّل",
+  "sponsorBlockSection": "حظر الرعايات",
+  "aboutSection": "حول التطبيق",
+  "defaultQuality": "الجودة الافتراضية",
+  "defaultSpeed": "السرعة الافتراضية",
+  "backgroundPlayback": "التشغيل في الخلفية",
+  "backgroundPlaybackSubtitle": "متابعة الصوت عند إطفاء الشاشة",
+  "doubleTapToSeek": "النقر المزدوج للتنقل",
+  "doubleTapToSeekSubtitle": "15 ثانية للأمام، 5 ثوانٍ للخلف",
+  "pictureInPicture": "صورة داخل صورة",
+  "enableSponsorBlock": "تفعيل حظر الرعايات",
+  "enableSponsorBlockSubtitle": "تخطي الرعايات والمقدمات والخواتيم تلقائيًا",
+  "autoSkipSponsors": "التخطي التلقائي",
+  "autoSkipSponsorsSubtitle": "التخطي دون إظهار زر",
+  "sponsorSkipCategories": "تخطَّ هذه الفئات:",
+  "checkForUpdates": "التحقق من التحديثات",
+  "openSourceLicenses": "تراخيص المصادر المفتوحة",
+  "chooseTheme": "اختيار المظهر",
+  "followSystem": "حسب النظام",
+  "light": "فاتح",
+  "dark": "داكن",
+  "english": "English",
+  "arabic": "العربية",
+  "shortsTab": "شورتس",
+  "search": "بحث",
+  "downloads": "التنزيلات",
+  "signIn": "تسجيل الدخول",
+  "signOut": "تسجيل الخروج",
+  "signedIn": "تم تسجيل الدخول",
+  "cancel": "إلغاء",
+  "clearAll": "مسح الكل",
+  "showMore": "عرض المزيد",
+  "showLess": "عرض أقل",
+  "topicAll": "الكل",
+  "topicMusic": "موسيقى",
+  "topicGaming": "ألعاب",
+  "topicLive": "بث مباشر",
+  "topicNews": "أخبار",
+  "topicTechnology": "تقنية",
+  "topicSports": "رياضة",
+  "topicCooking": "طبخ",
+  "like": "إعجاب",
+  "share": "مشاركة",
+  "save": "حفظ",
+  "download": "تنزيل",
+  "downloaded": "تم التنزيل",
+  "comments": "التعليقات",
+  "subscribe": "اشتراك",
+  "subscribed": "مشترك",
+  "upNext": "التالي",
+  "chapters": "الفصول",
+  "linkCopied": "تم نسخ الرابط",
+  "downloadStarted": "بدأ التنزيل",
+  "quality": "الجودة",
+  "playbackSpeed": "سرعة التشغيل",
+  "subtitles": "الترجمة / CC",
+  "repeatMode": "وضع التكرار",
+  "sleepTimer": "مؤقت النوم",
+  "volume": "مستوى الصوت",
+  "playbackQueue": "قائمة التشغيل",
+  "videoZoom": "تكبير الفيديو",
+  "seekInterval": "مقدار التنقل",
+  "statsForNerds": "إحصائيات تفصيلية",
+  "off": "إيقاف",
+  "normal": "عادي",
+  "unavailable": "غير متاح",
+  "accountSection": "الحساب",
+  "feedSection": "المحتوى",
+  "theme": "المظهر",
+  "thumbnails": "الصور المصغّرة",
+  "deArrow": "عناوين وصور DeArrow",
+  "deArrowSubtitle": "بدائل مجتمعية للعناوين المضللة",
+  "blockedChannels": "القنوات المحظورة",
+  "unblockAll": "إلغاء حظر الكل",
+  "noDownloads": "لا توجد تنزيلات بعد",
+  "noDownloadsSubtitle": "اضغط تنزيل على أي مقطع لمشاهدته دون اتصال",
+  "nothingHereYet": "لا يوجد شيء هنا بعد",
+  "subscriptionsFeedEmpty": "ستظهر هنا مقاطع القنوات التي تشترك بها",
+  "noChannelsYet": "لا توجد قنوات بعد",
+  "recentSearches": "عمليات البحث الأخيرة",
+  "latest": "الأحدث",
+  "channels": "القنوات",
+  "syncFromAccount": "مزامنة من حسابي",
+  "nothingToShow": "لا يوجد محتوى لعرضه",
+
+  "signInSubtitle": "استخدم اشتراكاتك وقوائم التشغيل الخاصة بك",
+  "signedInSubtitle": "اضغط لإدارة حسابك أو تسجيل الخروج",
+  "downloadsSubtitle": "مقاطع محفوظة للتشغيل دون اتصال",
+  "version": "الإصدار",
+  "noUpdatesAvailable": "لا توجد تحديثات متاحة",
+  "blockedCount": "{count} محظورة",
+  "@blockedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "hideItem": "إخفاء {what}",
+  "@hideItem": {
+    "placeholders": {
+      "what": {
+        "type": "String"
+      }
+    }
+  },
+
+  "hideShortsHome": "الشورتس في الرئيسية",
+  "hideShortsSubscriptions": "الشورتس في الاشتراكات",
+  "hideShortsSearch": "الشورتس في البحث",
+  "hideShortsChannel": "الشورتس في القنوات",
+  "hideWatchedHome": "المقاطع المُشاهَدة في الرئيسية",
+  "hideWatchedSubscriptions": "المقاطع المُشاهَدة في الاشتراكات",
+  "hideUpcomingHome": "المقاطع القادمة في الرئيسية",
+  "hideUpcomingSubscriptions": "المقاطع القادمة في الاشتراكات",
+  "hideStreamsSubscriptions": "البث المباشر في الاشتراكات",
+
+  "thumbnailOriginal": "صورة الناشر",
+  "thumbnailStart": "لقطة من بداية المقطع",
+  "thumbnailMiddle": "لقطة من منتصف المقطع",
+  "thumbnailEnd": "لقطة من نهاية المقطع",
+
+  "categorySponsor": "رعاية إعلانية",
+  "categoryIntro": "المقدمة",
+  "categoryOutro": "الخاتمة",
+  "categorySelfPromo": "ترويج ذاتي",
+  "categoryInteraction": "التذكير بالتفاعل",
+  "categoryHighlight": "أبرز اللحظات",
+  "categoryPreview": "معاينة",
+  "categoryMusicOffTopic": "مقاطع غير موسيقية",
+  "categoryFiller": "محتوى حشو",
+
+  "repeatNone": "إيقاف التشغيل بعد مقطع واحد",
+  "repeatOne": "تكرار المقطع الحالي",
+  "repeatPause": "الإيقاف المؤقت بعد كل مقطع",
+  "repeatNoneShort": "إيقاف",
+  "repeatOneShort": "تكرار المقطع",
+  "repeatPauseShort": "توقف عند النهاية",
+
+  "fitDefault": "افتراضي",
+  "fitWidth": "ملء العرض",
+  "fitHeight": "ملء الارتفاع",
+  "fitStretch": "تمديد",
+  "fitZoom": "تكبير (اقتصاص)",
+
+  "noAlternativesAvailable": "لا توجد جودات أخرى متاحة",
+  "autoGenerated": "تلقائية",
+  "minutesShort": "{count} دقيقة",
+  "@minutesShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "minutesLeft": "بقي {count} دقيقة",
+  "@minutesLeft": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pausingIn": "سيتوقف بعد {count} دقيقة",
+  "@pausingIn": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "secondsShort": "{count} ثانية",
+  "@secondsShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "percentBoost": "{percent}% (تضخيم)",
+  "@percentBoost": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "percentValue": "{percent}%",
+  "@percentValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "volumeBoostWarning": "المستويات فوق 100% تضخّم الصوت وقد تُحدث تشويشًا في المصادر العالية.",
+  "skipAutomatically": "التخطي تلقائيًا",
+  "skipAutomaticallySubtitle": "وإلا سيظهر زر التخطي",
+  "autoSkip": "تلقائي",
+  "manual": "يدوي",
+  "clearQueue": "إفراغ القائمة",
+  "empty": "فارغة",
+  "videoIdLabel": "معرّف المقطع",
+  "resolution": "الدقة",
+  "codec": "الترميز",
+  "bitrate": "معدل البت",
+  "audioTrack": "مسار الصوت",
+  "muxedWithVideo": "مدمج مع الفيديو",
+  "separateStream": "مسار منفصل",
+  "buffered": "المخزَّن مؤقتًا",
+  "speed": "السرعة",
+  "sponsorSegments": "مقاطع الرعاية",
+  "switchingQuality": "جارٍ التحويل إلى {quality}…",
+  "@switchingQuality": {
+    "placeholders": {
+      "quality": {
+        "type": "String"
+      }
+    }
+  },
+
+  "syncedChannels": "تمت مزامنة {count} قناة",
+  "@syncedChannels": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "couldNotReadSubscriptions": "تعذّرت قراءة اشتراكاتك",
+  "signInToUseAccount": "اشترك في قنوات، أو سجّل الدخول لاستخدام حسابك",
+  "noChannelsSubtitle": "اشترك من صفحة قناة، أو زامن حسابك",
+  "unsubscribe": "إلغاء الاشتراك",
+  "subscriberCount": "{count} مشترك",
+  "@subscriberCount": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "allSubscriptions": "الكل",
+
+  "browse": "التصفح",
+  "you": "حسابي",
+  "trending": "الرائج",
+  "music": "موسيقى",
+  "gaming": "ألعاب",
+  "news": "أخبار",
+  "sports": "رياضة",
+  "live": "بث مباشر",
+  "history": "سجل المشاهدة",
+  "playlists": "قوائم التشغيل",
+  "watchLater": "مشاهدة لاحقًا",
+  "favorites": "المفضلة",
+  "myChannel": "قناتك",
+  "notSignedIn": "لم تسجّل الدخول",
+  "viewsCount": "{count} مشاهدة",
+  "@viewsCount": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "justNow": "الآن",
+  "yearsAgo": "{count, plural, =1{قبل سنة} =2{قبل سنتين} few{قبل {count} سنوات} other{قبل {count} سنة}}",
+  "@yearsAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "monthsAgo": "{count, plural, =1{قبل شهر} =2{قبل شهرين} few{قبل {count} أشهر} other{قبل {count} شهرًا}}",
+  "@monthsAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "weeksAgo": "{count, plural, =1{قبل أسبوع} =2{قبل أسبوعين} few{قبل {count} أسابيع} other{قبل {count} أسبوعًا}}",
+  "@weeksAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "daysAgo": "{count, plural, =1{قبل يوم} =2{قبل يومين} few{قبل {count} أيام} other{قبل {count} يومًا}}",
+  "@daysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "{count, plural, =1{قبل ساعة} =2{قبل ساعتين} few{قبل {count} ساعات} other{قبل {count} ساعة}}",
+  "@hoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "minutesAgo": "{count, plural, =1{قبل دقيقة} =2{قبل دقيقتين} few{قبل {count} دقائق} other{قبل {count} دقيقة}}",
+  "@minutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noComments": "لا توجد تعليقات بعد",
+  "noCommentsSubtitle": "كن أول من يعلّق",
+  "unsubscribed": "تم إلغاء الاشتراك",
+  "noVideos": "لا توجد مقاطع",
+  "noPlaylists": "لا توجد قوائم تشغيل بعد",
+  "channelIdLabel": "معرّف القناة",
+  "subscribers": "المشتركون",
+  "waitingForApproval": "بانتظار الموافقة…",
+  "getSignInCode": "احصل على رمز تسجيل الدخول",
+  "codeCopied": "تم نسخ الرمز",
+  "videos": "المقاطع",
+  "streamCapped": "أوقف يوتيوب بث هذا المقطع في منتصفه. عادةً ما يكون مقيّدًا — جرّب جودة أخرى أو مقطعًا آخر.",
+  "noPlaylistsSubtitle": "ستظهر هنا قوائم التشغيل التي تنشئها في يوتيوب",
+  "syncing": "جارٍ المزامنة…",
+  "historySynced": "تمت مزامنة {count} مقطعاً من حسابك",
+  "@historySynced": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "videoCount": "{count, plural, =1{مقطع واحد} =2{مقطعان} few{{count} مقاطع} other{{count} مقطعاً}}",
+  "@videoCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveUnavailable": "هذا البث غير متاح — ربما انتهى أو أنه مخصص للأعضاء.",
+  "searchYouTube": "ابحث في يوتيوب…",
+  "pipUnavailable": "وضع صورة داخل صورة غير متاح هنا",
+  "skipCategory": "تخطي {category}",
+  "@skipCategory": {
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  }
+}

@@ -1,0 +1,409 @@
+{
+  "@@locale": "en",
+  "appTitle": "SmartTube",
+  "homeTab": "Home",
+  "searchTab": "Search",
+  "subscriptionsTab": "Subscriptions",
+  "libraryTab": "Library",
+  "settingsTab": "Settings",
+  "playVideo": "Play",
+  "pauseVideo": "Pause",
+  "skipForward": "Skip forward 15 seconds",
+  "skipBackward": "Skip backward 5 seconds",
+  "skipSponsor": "Skip Sponsor",
+  "qualityLowest": "Lowest (144p)",
+  "qualityLow": "Low (240p)",
+  "qualityMedium": "Medium (480p)",
+  "qualityHigh": "High (720p)",
+  "qualityHighest": "Highest (1080p+)",
+  "qualityBest": "Best available",
+  "qualityAuto": "Auto",
+  "speedLabel": "{speed}x",
+  "@speedLabel": {
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
+  "errorNetwork": "No internet connection",
+  "errorUnknown": "Something went wrong",
+  "retry": "Try again",
+  "versionLabel": "Version {version}",
+  "@versionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "noResults": "No results found",
+  "noHistory": "No watch history",
+  "noFavorites": "No favorites yet",
+  "noWatchLater": "Watch Later is empty",
+  "noSubscriptions": "No subscriptions yet",
+  "emptyHistorySubtitle": "Videos you watch will appear here",
+  "emptyFavoritesSubtitle": "Tap the heart icon on any video to add it here",
+  "emptyWatchLaterSubtitle": "Save videos to watch later",
+  "emptySubscriptionsSubtitle": "Subscribe to channels to see their latest videos here",
+  "findChannels": "Find channels",
+  "darkMode": "Dark mode",
+  "language": "Language",
+  "notifications": "Notifications",
+  "generalSection": "General",
+  "playerSection": "Player",
+  "sponsorBlockSection": "SponsorBlock",
+  "aboutSection": "About",
+  "defaultQuality": "Default quality",
+  "defaultSpeed": "Default speed",
+  "backgroundPlayback": "Background playback",
+  "backgroundPlaybackSubtitle": "Continue audio when screen is off",
+  "doubleTapToSeek": "Double-tap to seek",
+  "doubleTapToSeekSubtitle": "15s forward, 5s backward",
+  "pictureInPicture": "Picture-in-Picture",
+  "enableSponsorBlock": "Enable SponsorBlock",
+  "enableSponsorBlockSubtitle": "Skip sponsors, intros, outros automatically",
+  "autoSkipSponsors": "Auto-skip",
+  "autoSkipSponsorsSubtitle": "Skip without showing a button",
+  "sponsorSkipCategories": "Skip these categories:",
+  "checkForUpdates": "Check for updates",
+  "openSourceLicenses": "Open source licenses",
+  "chooseTheme": "Choose theme",
+  "followSystem": "Follow system",
+  "light": "Light",
+  "dark": "Dark",
+  "english": "English",
+  "arabic": "العربية (Arabic)",
+  "shortsTab": "Shorts",
+  "search": "Search",
+  "downloads": "Downloads",
+  "signIn": "Sign in",
+  "signOut": "Sign out",
+  "signedIn": "Signed in",
+  "cancel": "Cancel",
+  "clearAll": "Clear all",
+  "showMore": "Show more",
+  "showLess": "Show less",
+  "topicAll": "All",
+  "topicMusic": "Music",
+  "topicGaming": "Gaming",
+  "topicLive": "Live",
+  "topicNews": "News",
+  "topicTechnology": "Technology",
+  "topicSports": "Sports",
+  "topicCooking": "Cooking",
+  "like": "Like",
+  "share": "Share",
+  "save": "Save",
+  "download": "Download",
+  "downloaded": "Downloaded",
+  "comments": "Comments",
+  "subscribe": "Subscribe",
+  "subscribed": "Subscribed",
+  "upNext": "Up next",
+  "chapters": "Chapters",
+  "linkCopied": "Link copied",
+  "downloadStarted": "Download started",
+  "quality": "Quality",
+  "playbackSpeed": "Playback speed",
+  "subtitles": "Subtitles / CC",
+  "repeatMode": "Repeat mode",
+  "sleepTimer": "Sleep timer",
+  "volume": "Volume",
+  "playbackQueue": "Playback queue",
+  "videoZoom": "Video zoom",
+  "seekInterval": "Seek interval",
+  "statsForNerds": "Stats for nerds",
+  "off": "Off",
+  "normal": "Normal",
+  "unavailable": "Unavailable",
+  "accountSection": "Account",
+  "feedSection": "Feed",
+  "theme": "Theme",
+  "thumbnails": "Thumbnails",
+  "deArrow": "DeArrow titles and thumbnails",
+  "deArrowSubtitle": "Community alternatives to clickbait",
+  "blockedChannels": "Blocked channels",
+  "unblockAll": "Unblock all",
+  "noDownloads": "No downloads yet",
+  "noDownloadsSubtitle": "Tap Download on a video to watch it offline",
+  "nothingHereYet": "Nothing here yet",
+  "subscriptionsFeedEmpty": "Videos from your subscriptions will show up here",
+  "noChannelsYet": "No channels yet",
+  "recentSearches": "Recent searches",
+  "latest": "Latest",
+  "channels": "Channels",
+  "syncFromAccount": "Sync from my account",
+  "nothingToShow": "Nothing to show",
+
+  "signInSubtitle": "Use your subscriptions and playlists",
+  "signedInSubtitle": "Tap to manage your account or sign out",
+  "downloadsSubtitle": "Videos saved for offline playback",
+  "version": "Version",
+  "noUpdatesAvailable": "No updates available",
+  "blockedCount": "{count} blocked",
+  "@blockedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "hideItem": "Hide {what}",
+  "@hideItem": {
+    "placeholders": {
+      "what": {
+        "type": "String"
+      }
+    }
+  },
+
+  "hideShortsHome": "Shorts in Home",
+  "hideShortsSubscriptions": "Shorts in Subscriptions",
+  "hideShortsSearch": "Shorts in Search",
+  "hideShortsChannel": "Shorts on channels",
+  "hideWatchedHome": "watched videos in Home",
+  "hideWatchedSubscriptions": "watched videos in Subscriptions",
+  "hideUpcomingHome": "upcoming videos in Home",
+  "hideUpcomingSubscriptions": "upcoming videos in Subscriptions",
+  "hideStreamsSubscriptions": "live streams in Subscriptions",
+
+  "thumbnailOriginal": "Uploader's thumbnail",
+  "thumbnailStart": "Frame near the start",
+  "thumbnailMiddle": "Frame from the middle",
+  "thumbnailEnd": "Frame near the end",
+
+  "categorySponsor": "Sponsor",
+  "categoryIntro": "Intro",
+  "categoryOutro": "Outro",
+  "categorySelfPromo": "Self-promotion",
+  "categoryInteraction": "Interaction reminder",
+  "categoryHighlight": "Highlight",
+  "categoryPreview": "Preview",
+  "categoryMusicOffTopic": "Music (off-topic)",
+  "categoryFiller": "Filler",
+
+  "repeatNone": "Stop playback after one video",
+  "repeatOne": "Repeat current video",
+  "repeatPause": "Pause playback after each video",
+  "repeatNoneShort": "Off",
+  "repeatOneShort": "Repeat one",
+  "repeatPauseShort": "Pause at end",
+
+  "fitDefault": "Default",
+  "fitWidth": "Fit width",
+  "fitHeight": "Fit height",
+  "fitStretch": "Stretch",
+  "fitZoom": "Zoom (crop)",
+
+  "noAlternativesAvailable": "No alternatives available",
+  "autoGenerated": "auto",
+  "minutesShort": "{count} min",
+  "@minutesShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "minutesLeft": "{count} min left",
+  "@minutesLeft": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pausingIn": "Pausing in {count} minutes",
+  "@pausingIn": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "secondsShort": "{count} sec",
+  "@secondsShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "percentBoost": "{percent}% (boost)",
+  "@percentBoost": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "percentValue": "{percent}%",
+  "@percentValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "volumeBoostWarning": "Levels above 100% amplify the audio and can distort loud sources.",
+  "skipAutomatically": "Skip automatically",
+  "skipAutomaticallySubtitle": "Otherwise a Skip button appears",
+  "autoSkip": "Auto-skip",
+  "manual": "Manual",
+  "clearQueue": "Clear queue",
+  "empty": "Empty",
+  "videoIdLabel": "Video ID",
+  "resolution": "Resolution",
+  "codec": "Codec",
+  "bitrate": "Bitrate",
+  "audioTrack": "Audio track",
+  "muxedWithVideo": "muxed with video",
+  "separateStream": "separate stream",
+  "buffered": "Buffered",
+  "speed": "Speed",
+  "sponsorSegments": "Sponsor segments",
+  "switchingQuality": "Switching to {quality}…",
+  "@switchingQuality": {
+    "placeholders": {
+      "quality": {
+        "type": "String"
+      }
+    }
+  },
+
+  "syncedChannels": "Synced {count} channels",
+  "@syncedChannels": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "couldNotReadSubscriptions": "Could not read your subscriptions",
+  "signInToUseAccount": "Subscribe to channels, or sign in to use your account",
+  "noChannelsSubtitle": "Subscribe from a channel page, or sync your account",
+  "unsubscribe": "Unsubscribe",
+  "subscriberCount": "{count} subscribers",
+  "@subscriberCount": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "allSubscriptions": "All",
+
+  "browse": "Browse",
+  "you": "You",
+  "trending": "Trending",
+  "music": "Music",
+  "gaming": "Gaming",
+  "news": "News",
+  "sports": "Sports",
+  "live": "Live",
+  "history": "History",
+  "playlists": "Playlists",
+  "watchLater": "Watch later",
+  "favorites": "Favorites",
+  "myChannel": "Your channel",
+  "notSignedIn": "Not signed in",
+  "viewsCount": "{count} views",
+  "@viewsCount": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "justNow": "just now",
+  "yearsAgo": "{count, plural, =1{1 year ago} other{{count} years ago}}",
+  "@yearsAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "monthsAgo": "{count, plural, =1{1 month ago} other{{count} months ago}}",
+  "@monthsAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "weeksAgo": "{count, plural, =1{1 week ago} other{{count} weeks ago}}",
+  "@weeksAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "daysAgo": "{count, plural, =1{1 day ago} other{{count} days ago}}",
+  "@daysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "{count, plural, =1{1 hour ago} other{{count} hours ago}}",
+  "@hoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "minutesAgo": "{count, plural, =1{1 minute ago} other{{count} minutes ago}}",
+  "@minutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noComments": "No comments yet",
+  "noCommentsSubtitle": "Be the first to comment",
+  "unsubscribed": "Unsubscribed",
+  "noVideos": "No videos",
+  "noPlaylists": "No playlists yet",
+  "channelIdLabel": "Channel ID",
+  "subscribers": "Subscribers",
+  "waitingForApproval": "Waiting for approval…",
+  "getSignInCode": "Get a sign-in code",
+  "codeCopied": "Code copied",
+  "videos": "Videos",
+  "streamCapped": "YouTube stopped serving this video part-way through. It is usually restricted — try another quality, or another video.",
+  "noPlaylistsSubtitle": "Playlists you create on YouTube show up here",
+  "syncing": "Syncing…",
+  "historySynced": "Synced {count} videos from your account",
+  "@historySynced": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "videoCount": "{count, plural, =1{1 video} other{{count} videos}}",
+  "@videoCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveUnavailable": "This broadcast is not available — it may have ended, or be limited to members.",
+  "searchYouTube": "Search YouTube…",
+  "pipUnavailable": "Picture-in-picture is not available here",
+  "skipCategory": "Skip {category}",
+  "@skipCategory": {
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  }
+}
