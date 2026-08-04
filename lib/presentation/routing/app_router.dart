@@ -20,6 +20,7 @@ import '../screens/settings/settings_screen.dart';
 import '../screens/settings/sign_in_screen.dart';
 import '../screens/shorts/shorts_screen.dart';
 import '../screens/subscriptions/subscriptions_screen.dart';
+import '../widgets/mini_player.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -152,7 +153,15 @@ class MainShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      body: child,
+      // The mini player rides above the tab bar and renders itself away
+      // when nothing is loaded, so the tabs keep their full height until
+      // there is actually something playing.
+      body: Column(
+        children: [
+          Expanded(child: child),
+          const MiniPlayer(),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex(context),
         onDestinationSelected: (index) => context.go(_tabs[index]),
