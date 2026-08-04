@@ -46,11 +46,23 @@ void main() async {
         'data',
         'crypto',
       ],
-      title: 'SmartTube',
+      title: 'BoodTube',
     ),
   );
   await _tunePlayerCache(player);
-  final audioHandler = await setupAudioService(player);
+
+  // Nothing on the way to runApp is allowed to decide whether the app
+  // renders. audio_service talks to platform channels that can throw or
+  // simply never answer, and awaiting it unguarded turned a background
+  // playback problem into a permanently blank screen. Without the
+  // handler the app loses the lock screen controls; without runApp it
+  // loses everything.
+  final audioHandler = await setupAudioService(player)
+      .timeout(const Duration(seconds: 10))
+      .catchError((Object e) {
+    debugPrint('audio service unavailable, continuing without it: $e');
+    return SmartTubeAudioHandler(player);
+  });
 
   runApp(
     ProviderScope(
@@ -106,7 +118,7 @@ class SmartTubeApp extends ConsumerWidget {
     final settings = ref.watch(settingsControllerProvider);
 
     return MaterialApp.router(
-      title: 'SmartTube',
+      title: 'BoodTube',
       debugShowCheckedModeBanner: false,
 
       // FIXED: Localization delegates

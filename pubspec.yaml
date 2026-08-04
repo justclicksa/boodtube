@@ -43,6 +43,9 @@ dependencies:
   # Background audio
   audio_service: ^0.18.0
   just_audio: ^0.9.0
+  # Already present transitively; declared so main() can claim the iOS
+  # `playback` category, without which iOS suspends audio on background.
+  audio_session: ^0.1.25
 
   # UI utilities
   cached_network_image: ^3.4.0
@@ -88,7 +91,3 @@ dev_dependencies:
   # Pinned so analyzer_plugin/custom_lint_visitor resolve to a mutually
   # compatible set (drift_dev 2.28 breaks against analyzer >=7.4)
   analyzer: 7.3.0
-
-flutter:
-  uses-material-design: true
-  generate: true

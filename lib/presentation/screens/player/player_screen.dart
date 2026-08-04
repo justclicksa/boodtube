@@ -380,6 +380,16 @@ class _PlayerSurface extends ConsumerWidget {
                 controls: null,
                 fit: _fit,
                 fill: Colors.black,
+                // media_kit_video defaults this to true and calls
+                // player.pause() the moment the app backgrounds. That is
+                // the right default for a widget that assumes you are
+                // watching, and it is what silently defeated background
+                // playback here: the process stayed alive and the audio
+                // session stayed active, but mpv had been paused out
+                // from under us. This app wants audio to keep going, and
+                // PlayerController drops the video track on background
+                // itself so nothing decodes off-screen.
+                pauseUponEnteringBackgroundMode: false,
               ),
 
             if (state.isLoading || (state.isBuffering && state.error == null))

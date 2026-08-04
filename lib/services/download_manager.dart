@@ -71,7 +71,14 @@ class DownloadManager {
 
   Map<String, DownloadProgress> get active => Map.unmodifiable(_active);
 
-  void _emit() => _controller.add(Map.of(_active));
+  /// A download in flight outlives dispose() — it is a plain Future, not
+  /// something the container can cancel — so it keeps reporting progress
+  /// into a controller that is already closed and throws "Cannot add new
+  /// events after calling close" over a torn-down app.
+  void _emit() {
+    if (_controller.isClosed) return;
+    _controller.add(Map.of(_active));
+  }
 
   /// Downloads [item] at [quality] for offline playback. Returns when the
   /// files are on disk and recorded in the database.
