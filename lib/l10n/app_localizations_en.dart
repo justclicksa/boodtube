@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'SmartTube';
+  String get appTitle => 'BoodTube';
 
   @override
   String get homeTab => 'Home';

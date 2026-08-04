@@ -847,7 +847,7 @@ class AuthenticatedInnerTubeClient {
     final runs = node['runs'];
     if (runs is List) {
       return runs
-          .whereType<Map>()
+          .whereType<Map<dynamic, dynamic>>()
           .map((run) => run['text'])
           .whereType<String>()
           .join();

@@ -9,7 +9,7 @@ class AppLocalizationsAr extends AppLocalizations {
   AppLocalizationsAr([String locale = 'ar']) : super(locale);
 
   @override
-  String get appTitle => 'سمارت تيوب';
+  String get appTitle => 'بود تيوب';
 
   @override
   String get homeTab => 'الرئيسية';

@@ -52,7 +52,7 @@ class HomeScreen extends ConsumerWidget {
             const Icon(Icons.play_arrow_rounded,
                 color: YouTubeColors.red, size: 30),
             const SizedBox(width: 2),
-            Text('SmartTube', style: Theme.of(context).textTheme.titleLarge),
+            Text(l10n.appTitle, style: Theme.of(context).textTheme.titleLarge),
           ],
         ),
         actions: [
