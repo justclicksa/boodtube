@@ -674,34 +674,34 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
     }
   }
 
+  Widget _gestureRegion({required Widget child, Key? key}) {
+    return GestureDetector(
+      key: key,
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onToggleControls,
+      onDoubleTapDown: (details) => _onDoubleTap(details.globalPosition),
+      onLongPressStart: (_) => _startSpeedHold(),
+      onLongPressEnd: (_) => _endSpeedHold(),
+      onLongPressCancel: _endSpeedHold,
+      onVerticalDragStart: _beginVerticalDrag,
+      onVerticalDragUpdate: _updateVerticalDrag,
+      onVerticalDragEnd: (details) =>
+          _endVerticalDrag(details.primaryVelocity ?? 0),
+      onVerticalDragCancel: () => _endVerticalDrag(0),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
 
     return ColoredBox(
       color: Colors.black,
-      child: GestureDetector(
+      child: _gestureRegion(
         key: const ValueKey('player-surface-interactions'),
-        // The native/texture-backed Video child may report itself as a
-        // hit-test target even with package controls disabled. Being
-        // explicit here keeps all blank areas of the surface interactive.
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onToggleControls,
-        onDoubleTapDown: (details) => _onDoubleTap(details.globalPosition),
-        // Press and hold anywhere for double speed, the way YouTube
-        // does; releasing puts the previous rate back.
-        onLongPressStart: (_) => _startSpeedHold(),
-        onLongPressEnd: (_) => _endSpeedHold(),
-        onLongPressCancel: _endSpeedHold,
-        onVerticalDragStart: (details) => _beginVerticalDrag(details),
-        onVerticalDragUpdate: (details) => _updateVerticalDrag(details),
-        onVerticalDragEnd: (details) =>
-            _endVerticalDrag(details.primaryVelocity ?? 0),
-        // A drag that loses the arena — to a scroll underneath, or to
-        // the platform reclaiming the touch — reports cancel and never
-        // end. Without this the player is stranded half-collapsed with
-        // no gesture left to finish it.
-        onVerticalDragCancel: () => _endVerticalDrag(0),
+        // Handles blank areas whenever visible controls do not claim the
+        // gesture for a button or the progress slider.
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -759,6 +759,21 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
                   // PlayerController drops the video track on background
                   // itself so nothing decodes off-screen.
                   pauseUponEnteringBackgroundMode: false,
+                ),
+              ),
+
+            // A physical iPhone may keep the texture as the active hit-test
+            // target. While controls are hidden, this plane sits directly
+            // above it and guarantees that a tap or vertical swipe reaches
+            // BoodTube. It disappears when controls are visible so buttons
+            // and the progress slider remain directly interactive.
+            if (!widget.showControls && state.error == null)
+              Positioned.fill(
+                child: _gestureRegion(
+                  key: const ValueKey(
+                    'player-hidden-controls-gesture-layer',
+                  ),
+                  child: const SizedBox.expand(),
                 ),
               ),
 
