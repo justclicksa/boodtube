@@ -1,6 +1,6 @@
-# iOS 13 is the floor: screen_brightness_ios requires it, and the Xcode
-# project targets the same. Anything lower fails `pod install`.
-platform :ios, '13.0'
+# iOS 15 is the floor: flutter_chrome_cast 1.4.6 requires it, and the
+# Xcode project targets the same. Anything lower fails `pod install`.
+platform :ios, '15.0'
 
 # CocoaPods analytics slow the build down and report nothing useful here.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -50,7 +50,7 @@ post_install do |installer|
     target.build_configurations.each do |config|
       # Some pods still default to iOS 11/12, which Xcode 15+ warns about
       # and which conflicts with the app's own floor.
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
 
       # audio_service needs these to compile its background-audio paths,
       # and permission_handler-style pods read them too. Declaring only
