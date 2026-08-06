@@ -43,6 +43,23 @@ void main() {
       );
     });
 
+    test('the black upper area of portrait fullscreen exits to watch page', () {
+      // Matches the real iPhone layout: a 16:9 video is letterboxed in the
+      // middle of a tall fullscreen surface. The black area is intentionally
+      // part of the interaction region, not dead space around the renderer.
+      const portraitSurface = Size(590, 1279);
+      for (final x in [24.0, 295.0, 566.0]) {
+        expect(
+          playerVerticalDragMode(
+            collapsible: false,
+            start: Offset(x, 300),
+            surfaceSize: portraitSurface,
+          ),
+          PlayerVerticalDragMode.leaveFullscreen,
+        );
+      }
+    });
+
     test('lower outer edges retain brightness and volume gestures', () {
       expect(
         playerVerticalDragMode(
