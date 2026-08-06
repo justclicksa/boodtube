@@ -681,6 +681,11 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
     return ColoredBox(
       color: Colors.black,
       child: GestureDetector(
+        key: const ValueKey('player-surface-interactions'),
+        // The native/texture-backed Video child may report itself as a
+        // hit-test target even with package controls disabled. Being
+        // explicit here keeps all blank areas of the surface interactive.
+        behavior: HitTestBehavior.opaque,
         onTap: widget.onToggleControls,
         onDoubleTapDown: (details) => _onDoubleTap(details.globalPosition),
         // Press and hold anywhere for double speed, the way YouTube
@@ -716,38 +721,45 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
                 onRetry: widget.onRetry,
               )
             else
-              Video(
-                controller: widget.videoController,
-                controls: null,
-                fit: _fit,
-                fill: Colors.black,
-                subtitleViewConfiguration: SubtitleViewConfiguration(
-                  style: TextStyle(
-                    height: 1.35,
-                    fontSize: 28 * state.subtitleScale,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    backgroundColor: Colors.black.withValues(
-                      alpha: state.subtitleBackgroundOpacity,
+              // controls: null hides media_kit's controls, but its video
+              // surface can still join the gesture arena on a real iOS or
+              // Android texture. The app owns every player gesture, so the
+              // renderer must be display-only; otherwise taps and vertical
+              // drags intermittently disappear before reaching the parent.
+              IgnorePointer(
+                child: Video(
+                  controller: widget.videoController,
+                  controls: null,
+                  fit: _fit,
+                  fill: Colors.black,
+                  subtitleViewConfiguration: SubtitleViewConfiguration(
+                    style: TextStyle(
+                      height: 1.35,
+                      fontSize: 28 * state.subtitleScale,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      backgroundColor: Colors.black.withValues(
+                        alpha: state.subtitleBackgroundOpacity,
+                      ),
+                    ),
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      0,
+                      AppSpacing.lg,
+                      state.subtitleOffset,
                     ),
                   ),
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    0,
-                    AppSpacing.lg,
-                    state.subtitleOffset,
-                  ),
+                  // media_kit_video defaults this to true and calls
+                  // player.pause() the moment the app backgrounds. That is
+                  // the right default for a widget that assumes you are
+                  // watching, and it is what silently defeated background
+                  // playback here: the process stayed alive and the audio
+                  // session stayed active, but mpv had been paused out
+                  // from under us. This app wants audio to keep going, and
+                  // PlayerController drops the video track on background
+                  // itself so nothing decodes off-screen.
+                  pauseUponEnteringBackgroundMode: false,
                 ),
-                // media_kit_video defaults this to true and calls
-                // player.pause() the moment the app backgrounds. That is
-                // the right default for a widget that assumes you are
-                // watching, and it is what silently defeated background
-                // playback here: the process stayed alive and the audio
-                // session stayed active, but mpv had been paused out
-                // from under us. This app wants audio to keep going, and
-                // PlayerController drops the video track on background
-                // itself so nothing decodes off-screen.
-                pauseUponEnteringBackgroundMode: false,
               ),
 
             if (state.isLoading || (state.isBuffering && state.error == null))
