@@ -3,7 +3,7 @@
 // ============================================================
 // Based on actual API:
 //   - Video: id (VideoId), title, author, channelId, uploadDate, description, duration, isLive
-//   - StreamInfo mixin: videoId, tag, url, container (StreamContainer), size (FileSize), 
+//   - StreamInfo mixin: videoId, tag, url, container (StreamContainer), size (FileSize),
 //                       bitrate (Bitrate), fragments, codec (MediaType), qualityLabel
 //   - VideoStreamInfo mixin adds: videoCodec, videoQuality, videoResolution, framerate
 //   - AudioStreamInfo mixin adds: audioCodec, audioTrack
@@ -21,7 +21,12 @@ import '../../../domain/entities/chapter_item.dart';
 
 class MediaItemMapper {
   /// Convert youtube_explode Video → MediaItem
-  static domain.MediaItem fromVideo(Video video) {
+  ///
+  /// [channelAvatarUrl] is passed by callers that already know whose
+  /// channel this is (a channel page, a subscription). The scraped
+  /// search and playlist payloads carry no avatar at all, so for those
+  /// it stays null rather than being guessed at.
+  static domain.MediaItem fromVideo(Video video, {String? channelAvatarUrl}) {
     return domain.MediaItem(
       videoId: video.id.value,
       title: video.title,
@@ -29,6 +34,7 @@ class MediaItemMapper {
       author: video.author,
       channelId: video.channelId.value,
       channelTitle: video.author,
+      channelAvatarUrl: channelAvatarUrl,
       duration: video.duration ?? Duration.zero,
       // FIXED: uploadDate is DateTime in v3
       publishedAt: video.uploadDate ?? DateTime.now(),
@@ -40,12 +46,28 @@ class MediaItemMapper {
       subtitles: const [],
       chapters: _extractChaptersFromDescription(video.description),
       isLive: video.isLive,
+      viewCount: _viewCount(video),
     );
+  }
+
+  /// View count from the library's [Engagement] block.
+  ///
+  /// `Engagement.viewCount` is non-nullable, and the surfaces that carry
+  /// no view count at all (playlist pages, some channel upload rows)
+  /// construct it as `Engagement(0, null, null)` rather than leaving it
+  /// out. Printing "0 views" under every card of such a feed is worse
+  /// than printing nothing, so zero is read as "not reported" — the
+  /// difference only matters for a genuinely brand-new upload, where the
+  /// card simply falls back to the upload date.
+  static int? _viewCount(Video video) {
+    final views = video.engagement.viewCount;
+    return views > 0 ? views : null;
   }
 
   /// Extract chapter timestamps from video description
   /// (e.g., "0:00 Intro\n1:23 Main Topic\n5:42 Conclusion")
-  static List<ChapterItem> _extractChaptersFromDescription(String? description) {
+  static List<ChapterItem> _extractChaptersFromDescription(
+      String? description) {
     if (description == null || description.isEmpty) return const [];
 
     final regex = RegExp(

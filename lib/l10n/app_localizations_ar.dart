@@ -765,6 +765,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get noPlaylists => 'لا توجد قوائم تشغيل بعد';
 
   @override
+  String get channelHasNoPlaylists => 'لم تنشر هذه القناة أي قوائم تشغيل';
+
+  @override
   String get channelIdLabel => 'معرّف القناة';
 
   @override
@@ -778,6 +781,20 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get codeCopied => 'تم نسخ الرمز';
+
+  @override
+  String get signInUnofficialWarning =>
+      'هذا التطبيق ليس عميلاً رسمياً ليوتيوب. قد تُقيّد Google الحسابات المستخدمة مع العملاء غير الرسمية أو توقفها. يُفضّل استخدام حساب ثانوي.';
+
+  @override
+  String get signInStepOpenPage => '١. افتح هذه الصفحة على أي جهاز';
+
+  @override
+  String get signInStepEnterCode => '٢. أدخل هذا الرمز';
+
+  @override
+  String get signedInKeystoreNote =>
+      'تُجدَّد الجلسة تلقائياً. يُخزَّن الرمز في مخزن مفاتيح الجهاز ولا يغادر هذا الهاتف.';
 
   @override
   String get videos => 'المقاطع';
@@ -825,4 +842,204 @@ class AppLocalizationsAr extends AppLocalizations {
   String skipCategory(String category) {
     return 'تخطي $category';
   }
+
+  @override
+  String get searchFilters => 'عوامل التصفية';
+
+  @override
+  String get searchFilterUploadDate => 'تاريخ الرفع';
+
+  @override
+  String get searchFilterType => 'النوع';
+
+  @override
+  String get searchFilterDuration => 'المدة';
+
+  @override
+  String get searchFilterSortBy => 'الترتيب حسب';
+
+  @override
+  String get searchFilterAny => 'الكل';
+
+  @override
+  String get uploadDateLastHour => 'آخر ساعة';
+
+  @override
+  String get uploadDateToday => 'اليوم';
+
+  @override
+  String get uploadDateThisWeek => 'هذا الأسبوع';
+
+  @override
+  String get uploadDateThisMonth => 'هذا الشهر';
+
+  @override
+  String get uploadDateThisYear => 'هذه السنة';
+
+  @override
+  String get searchTypeVideo => 'فيديو';
+
+  @override
+  String get searchTypeMovie => 'فيلم';
+
+  @override
+  String get searchDurationShort => 'أقل من ٤ دقائق';
+
+  @override
+  String get searchDurationMedium => 'من ٤ إلى ٢٠ دقيقة';
+
+  @override
+  String get searchDurationLong => 'أكثر من ٢٠ دقيقة';
+
+  @override
+  String get sortByRelevance => 'الأكثر صلة';
+
+  @override
+  String get sortByUploadDate => 'تاريخ الرفع';
+
+  @override
+  String get sortByViewCount => 'عدد المشاهدات';
+
+  @override
+  String get sortByRating => 'التقييم';
+
+  @override
+  String get resetFilters => 'إعادة تعيين';
+
+  @override
+  String get clearFilters => 'مسح عوامل التصفية';
+
+  @override
+  String activeFilterCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عامل تصفية',
+      few: '$count عوامل تصفية',
+      two: 'عاملا تصفية',
+      one: 'عامل تصفية واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get noResultsSubtitle => 'جرّب كلمات أخرى أو امسح عوامل التصفية.';
+
+  @override
+  String get removeFromHistory => 'إزالة من السجل';
+
+  @override
+  String get errorNotFound => 'المحتوى غير موجود';
+
+  @override
+  String get errorUnauthorized => 'تحتاج إلى تسجيل الدخول لعرض هذا';
+
+  @override
+  String get errorRateLimited => 'طلبات كثيرة — حاول بعد قليل';
+
+  @override
+  String get errorParse => 'تعذّرت قراءة رد يوتيوب';
+
+  @override
+  String get errorDatabase => 'تعذّرت قراءة البيانات المحلية';
+
+  @override
+  String get errorYouTube => 'تعذّر على يوتيوب تحميل هذا الآن';
+
+  @override
+  String get offlineTitle => 'أنت غير متصل بالإنترنت';
+
+  @override
+  String get offlineSubtitle => 'في انتظار الاتصال…';
+
+  @override
+  String get backOnline => 'عاد الاتصال';
+
+  @override
+  String get systemDefault => 'لغة النظام';
+
+  @override
+  String get searchSettings => 'ابحث في الإعدادات';
+
+  @override
+  String noSettingsMatch(String query) {
+    return 'لا توجد إعدادات تطابق \"$query\"';
+  }
+
+  @override
+  String get updateCheckUnavailable =>
+      'التحقق التلقائي من التحديثات غير متاح في هذه النسخة';
+
+  @override
+  String get shortsEmpty => 'لا توجد شورتس متاحة حاليًا';
+
+  @override
+  String get shortsLoadFailed => 'تعذّر تحميل الشورتس';
+
+  @override
+  String get shortsDislike => 'عدم إعجاب';
+
+  @override
+  String get shortsOpenChannel => 'فتح القناة';
+
+  @override
+  String get play => 'تشغيل';
+
+  @override
+  String get pause => 'إيقاف مؤقّت';
+
+  @override
+  String get close => 'إغلاق';
+
+  @override
+  String get fullscreen => 'ملء الشاشة';
+
+  @override
+  String get exitFullscreen => 'إنهاء ملء الشاشة';
+
+  @override
+  String get videoOptions => 'خيارات أخرى';
+
+  @override
+  String get notInterested => 'لا يهمّني';
+
+  @override
+  String get blockChannel => 'لا تقترح هذه القناة';
+
+  @override
+  String get goToChannel => 'الانتقال إلى القناة';
+
+  @override
+  String miniPlayerLabel(String title) {
+    return 'يُشغَّل الآن: $title';
+  }
+
+  @override
+  String seekSeconds(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ثانية',
+      few: '$count ثوانٍ',
+      two: 'ثانيتان',
+      one: 'ثانية واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String viewReplies(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'عرض $count ردّ',
+      few: 'عرض $count ردود',
+      two: 'عرض ردّين',
+      one: 'عرض ردّ واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get continueWatching => 'تابع المشاهدة';
 }

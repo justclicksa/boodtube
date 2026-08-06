@@ -69,8 +69,11 @@ void main() {
     // before playback ever had a chance to start.
     const simulatorHasNoAudioOutput = 'could not open/initialize audio device';
     bool fatalError() {
+      // `error` carries the cause object now, not a message, so that the
+      // watch page can tell an outage from a pulled video.
       final e = state().error;
-      return e != null && !e.toLowerCase().contains(simulatorHasNoAudioOutput);
+      return e != null &&
+          !e.toString().toLowerCase().contains(simulatorHasNoAudioOutput);
     }
 
     // 3. Position advancing is the honest signal — `isPlaying` can be

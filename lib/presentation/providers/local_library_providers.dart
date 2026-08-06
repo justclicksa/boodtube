@@ -143,42 +143,122 @@ final isSubscribedProvider =
 // Toggle actions used by the player and channel screens.
 // ============================================================
 
+/// The first element, or null for an empty or absent iterable.
+T? _firstOrNull<T>(Iterable<T>? items) {
+  if (items == null) return null;
+  final iterator = items.iterator;
+  return iterator.moveNext() ? iterator.current : null;
+}
+
+/// Which library action failed, so the UI can word its message.
+enum LibraryAction {
+  like,
+  removeLike,
+  dislike,
+  watchLater,
+  subscribe,
+  unsubscribe
+}
+
+/// A library action that could not be completed. The local change has
+/// already been rolled back by the time this appears — it exists so the
+/// UI can say so rather than leave a button lying.
+class LibraryActionFailure {
+  const LibraryActionFailure({
+    required this.action,
+    required this.message,
+    this.cause,
+  });
+
+  final LibraryAction action;
+  final String message;
+  final Object? cause;
+
+  @override
+  String toString() => 'LibraryActionFailure($action, $message)';
+}
+
+/// The last failed library action, or null when the last one worked.
+///
+/// Watch it to show a snackbar; set it back to null once shown.
+final libraryActionErrorProvider =
+    StateProvider<LibraryActionFailure?>((ref) => null);
+
 class LibraryActions {
-  const LibraryActions(this._repo, this._remote);
+  const LibraryActions(this._repo, this._remote, this._ref);
   final LocalLibraryRepository _repo;
 
   /// Mirrors the action to the signed-in account. Local state is always
   /// updated first so the UI responds even when signed out or offline.
   final AuthenticatedInnerTubeClient _remote;
 
+  final Ref _ref;
+
   Future<void> toggleFavorite(MediaItem item) async {
+    _clearError();
     final current = await _repo.isFavorite(item.videoId);
     final wasFavorite = current.dataOrNull ?? false;
     if (wasFavorite) {
       await _repo.removeFromFavorites(item.videoId);
-      await _remote.removeLike(item.videoId);
+      await _mirror(
+        LibraryAction.removeLike,
+        'Could not remove the like from your YouTube account',
+        () => _remote.removeLike(item.videoId),
+        () => _repo.addToFavorites(item),
+      );
     } else {
       await _repo.addToFavorites(item);
-      await _remote.like(item.videoId);
+      await _mirror(
+        LibraryAction.like,
+        'Could not like this video on your YouTube account',
+        () => _remote.like(item.videoId),
+        () => _repo.removeFromFavorites(item.videoId),
+      );
     }
   }
 
   /// Dislikes on YouTube. There is no local counterpart — the app only
   /// tracks likes — so this removes any local like to stay consistent.
   Future<void> dislike(String videoId) async {
+    _clearError();
+    // Kept so the like can be put back if YouTube refuses the dislike.
+    final favorites = (await _repo.getFavorites()).dataOrNull;
+    final previous = _firstOrNull(
+      favorites?.where((item) => item.videoId == videoId),
+    );
+
     await _repo.removeFromFavorites(videoId);
-    await _remote.dislike(videoId);
+    await _mirror(
+      LibraryAction.dislike,
+      'Could not dislike this video on your YouTube account',
+      () => _remote.dislike(videoId),
+      () async {
+        if (previous != null) await _repo.addToFavorites(previous);
+      },
+    );
   }
 
+  /// Watch Later is local-only, so there is nothing to mirror — but the
+  /// write itself can still fail, and silently doing nothing is exactly
+  /// the failure mode this reports.
   Future<void> toggleWatchLater(MediaItem item) async {
+    _clearError();
     final current = await _repo.getWatchLater();
     final saved =
         current.dataOrNull?.any((v) => v.videoId == item.videoId) ?? false;
-    if (saved) {
-      await _repo.removeFromWatchLater(item.videoId);
-    } else {
-      await _repo.addToWatchLater(item);
-    }
+    final result = saved
+        ? await _repo.removeFromWatchLater(item.videoId)
+        : await _repo.addToWatchLater(item);
+    result.when(
+      success: (_) {},
+      failure: (message, type, cause) => _report(
+        LibraryActionFailure(
+          action: LibraryAction.watchLater,
+          message: message,
+          cause: cause,
+        ),
+      ),
+    );
   }
 
   Future<void> toggleSubscription(
@@ -186,18 +266,77 @@ class LibraryActions {
     String title, {
     String? avatarUrl,
   }) async {
+    _clearError();
     final current = await _repo.isSubscribed(channelId);
-    if (current.dataOrNull ?? false) {
+    final wasSubscribed = current.dataOrNull ?? false;
+    if (wasSubscribed) {
+      final existing = _firstOrNull(
+        (await _repo.getSubscriptions())
+            .dataOrNull
+            ?.where((s) => s.channelId == channelId),
+      );
       await _repo.unsubscribe(channelId);
-      await _remote.unsubscribe(channelId);
+      await _mirror(
+        LibraryAction.unsubscribe,
+        'Could not unsubscribe on your YouTube account',
+        () => _remote.unsubscribe(channelId),
+        () => _repo.subscribe(
+          channelId: channelId,
+          title: existing?.title ?? title,
+          avatarUrl: existing?.avatarUrl ?? avatarUrl,
+          subscriberCount: existing?.subscriberCount,
+        ),
+      );
     } else {
       await _repo.subscribe(
         channelId: channelId,
         title: title,
         avatarUrl: avatarUrl,
       );
-      await _remote.subscribe(channelId);
+      await _mirror(
+        LibraryAction.subscribe,
+        'Could not subscribe on your YouTube account',
+        () => _remote.subscribe(channelId),
+        () => _repo.unsubscribe(channelId),
+      );
     }
+  }
+
+  /// Sends a local change on to YouTube and undoes it locally when the
+  /// account rejects it.
+  ///
+  /// Signed out is not a failure: the whole library works offline, and
+  /// there is simply nothing to mirror to. Only a real refusal — a
+  /// non-200, a thrown request — rolls the local change back.
+  Future<void> _mirror(
+    LibraryAction action,
+    String message,
+    Future<bool> Function() send,
+    Future<void> Function() rollback,
+  ) async {
+    if (!await _remote.isSignedIn()) return;
+
+    Object? cause;
+    var accepted = false;
+    try {
+      accepted = await send();
+    } catch (e) {
+      cause = e;
+    }
+    if (accepted) return;
+
+    await rollback();
+    _report(
+      LibraryActionFailure(action: action, message: message, cause: cause),
+    );
+  }
+
+  void _report(LibraryActionFailure failure) {
+    _ref.read(libraryActionErrorProvider.notifier).state = failure;
+  }
+
+  void _clearError() {
+    _ref.read(libraryActionErrorProvider.notifier).state = null;
   }
 
   /// Pulls the account's real subscriptions into the local table so the
@@ -220,6 +359,7 @@ final libraryActionsProvider = Provider<LibraryActions>((ref) {
   return LibraryActions(
     ref.watch(localLibraryRepositoryProvider),
     ref.watch(authenticatedClientProvider),
+    ref,
   );
 });
 

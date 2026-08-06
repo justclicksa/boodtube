@@ -65,7 +65,8 @@ class AuthController extends StateNotifier<AuthState> {
     final current = _tokens;
     if (current != null && !current.isExpired) return current.accessToken;
 
-    final refresh = current?.refreshToken ?? await _storage.read(key: _refreshKey);
+    final refresh =
+        current?.refreshToken ?? await _storage.read(key: _refreshKey);
     if (refresh == null || refresh.isEmpty) return null;
     try {
       final tokens = await _client.refresh(refresh);

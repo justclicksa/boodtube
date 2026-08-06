@@ -21,7 +21,8 @@ sealed class Result<T> {
   /// if-else helper للـ null safety
   R when<R>({
     required R Function(T data) success,
-    required R Function(String message, FailureType type, Object? cause) failure,
+    required R Function(String message, FailureType type, Object? cause)
+        failure,
   }) {
     final self = this;
     return switch (self) {

@@ -23,6 +23,7 @@ import '../../providers/local_library_providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/empty_view.dart';
 import '../../widgets/error_view.dart';
+import '../../widgets/feed_tail.dart';
 import '../../widgets/loading_view.dart';
 import '../../widgets/video_card.dart';
 
@@ -92,19 +93,54 @@ class SubscriptionsScreen extends ConsumerWidget {
 // Latest
 // ============================================================
 
-class _LatestTab extends ConsumerWidget {
+class _LatestTab extends ConsumerStatefulWidget {
   const _LatestTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_LatestTab> createState() => _LatestTabState();
+}
+
+class _LatestTabState extends ConsumerState<_LatestTab> {
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  /// Fetch the next page while there is still a screenful to scroll, so
+  /// the feed never actually reaches a bottom the user can see.
+  ///
+  /// The channel filter is applied over the loaded pages rather than
+  /// re-queried, so this stays useful while one is selected: reaching
+  /// the end of a filtered list is exactly when more pages are worth
+  /// fetching, since that is where the rest of that channel's videos
+  /// are.
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (position.pixels < position.maxScrollExtent * 0.8) return;
+    ref.read(subscriptionsFeedPagedProvider.notifier).loadMore();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final feed = ref.watch(subscriptionsFeedProvider);
+    final feed = ref.watch(subscriptionsFeedPagedProvider);
     final filter = ref.watch(_channelFilterProvider);
 
     return feed.when(
-      data: (groups) {
-        final all = groups.expand((g) => g.mediaItems).toList();
-        if (all.isEmpty) {
+      data: (paged) {
+        if (paged.items.isEmpty) {
           return EmptyView(
             icon: Icons.subscriptions_outlined,
             title: l10n.nothingHereYet,
@@ -120,12 +156,13 @@ class _LatestTab extends ConsumerWidget {
         }
 
         final items = filter.isEmpty
-            ? all
-            : all.where((v) => v.channelId == filter).toList();
+            ? paged.items
+            : paged.items.where((v) => v.channelId == filter).toList();
 
         return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(subscriptionsFeedProvider),
+          onRefresh: () async => ref.invalidate(subscriptionsFeedPagedProvider),
           child: CustomScrollView(
+            controller: _scrollController,
             slivers: [
               const SliverToBoxAdapter(child: _ChannelStrip()),
               if (items.isEmpty)
@@ -144,14 +181,22 @@ class _LatestTab extends ConsumerWidget {
                     );
                   },
                 ),
+              SliverToBoxAdapter(
+                child: FeedTail(
+                  feed: paged,
+                  onRetry: () => ref
+                      .read(subscriptionsFeedPagedProvider.notifier)
+                      .loadMore(),
+                ),
+              ),
             ],
           ),
         );
       },
-      loading: () => const LoadingView(),
+      loading: () => const SkeletonList(style: SkeletonStyle.feed),
       error: (e, _) => ErrorView(
         error: e,
-        onRetry: () => ref.invalidate(subscriptionsFeedProvider),
+        onRetry: () => ref.invalidate(subscriptionsFeedPagedProvider),
       ),
     );
   }
@@ -174,20 +219,26 @@ class _ChannelStrip extends ConsumerWidget {
       height: 96,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
         itemCount: subs.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
         itemBuilder: (context, index) {
           if (index == 0) {
             return _StripEntry(
               label: l10n.allSubscriptions,
               selected: selected.isEmpty,
-              onTap: () =>
-                  ref.read(_channelFilterProvider.notifier).state = '',
+              onTap: () => ref.read(_channelFilterProvider.notifier).state = '',
               avatar: CircleAvatar(
                 radius: 26,
                 backgroundColor: theme.yt.chipBackground,
-                child: Icon(Icons.grid_view, color: theme.yt.secondaryText),
+                child: Icon(
+                  Icons.grid_view,
+                  color: theme.yt.secondaryText,
+                  semanticLabel: l10n.allSubscriptions,
+                ),
               ),
             );
           }
@@ -221,30 +272,44 @@ class _StripEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: SizedBox(
-        width: 72,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            avatar,
-            const SizedBox(height: 6),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                color: selected
-                    ? theme.colorScheme.onSurface
-                    : theme.yt.secondaryText,
-              ),
+    // An avatar and a truncated name read as two fragments; the channel
+    // name on its own is the whole control.
+    return Semantics(
+      label: label,
+      button: true,
+      selected: selected,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppSpacing.sm),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minWidth: AppSpacing.minTapTarget,
+            minHeight: AppSpacing.minTapTarget,
+          ),
+          child: SizedBox(
+            width: 72,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                avatar,
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    color: selected
+                        ? theme.colorScheme.onSurface
+                        : theme.yt.secondaryText,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -278,6 +343,7 @@ class _ChannelsTab extends ConsumerWidget {
           itemBuilder: (context, index) {
             final sub = subs[index];
             return ListTile(
+              minTileHeight: AppSpacing.minTapTarget,
               leading: _ChannelAvatar(sub: sub, radius: 24),
               title: Text(sub.title),
               subtitle: sub.subscriberCount != null
@@ -299,7 +365,7 @@ class _ChannelsTab extends ConsumerWidget {
           },
         );
       },
-      loading: () => const LoadingView(),
+      loading: () => const SkeletonList(style: SkeletonStyle.channelRow),
       error: (e, _) => ErrorView(
         error: e,
         onRetry: () => ref.invalidate(subscriptionsProvider),
@@ -322,20 +388,24 @@ class _ChannelAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return CircleAvatar(
-      radius: radius,
-      backgroundColor: theme.colorScheme.surfaceContainerHighest,
-      backgroundImage: sub.avatarUrl != null
-          ? CachedNetworkImageProvider(sub.avatarUrl!)
-          : null,
-      child: sub.avatarUrl == null
-          ? Text(
-              sub.title.isNotEmpty
-                  ? sub.title.characters.first.toUpperCase()
-                  : '?',
-              style: TextStyle(fontSize: radius * 0.7),
-            )
-          : null,
+    // Purely decorative beside the channel name: without this the
+    // fallback initial is announced as its own stray letter.
+    return ExcludeSemantics(
+      child: CircleAvatar(
+        radius: radius,
+        backgroundColor: theme.colorScheme.surfaceContainerHighest,
+        backgroundImage: sub.avatarUrl != null
+            ? CachedNetworkImageProvider(sub.avatarUrl!)
+            : null,
+        child: sub.avatarUrl == null
+            ? Text(
+                sub.title.isNotEmpty
+                    ? sub.title.characters.first.toUpperCase()
+                    : '?',
+                style: TextStyle(fontSize: radius * 0.7),
+              )
+            : null,
+      ),
     );
   }
 }

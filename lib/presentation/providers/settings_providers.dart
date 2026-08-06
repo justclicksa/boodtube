@@ -125,7 +125,8 @@ class SettingsController extends StateNotifier<AppSettings> {
     await _repo.setAutoSkipSponsors(enabled);
   }
 
-  Future<void> toggleSponsorCategory(SponsorCategory category, bool enabled) async {
+  Future<void> toggleSponsorCategory(
+      SponsorCategory category, bool enabled) async {
     final current = {...state.sponsorCategories};
     if (enabled) {
       current.add(category);

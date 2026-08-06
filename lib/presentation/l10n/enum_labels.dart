@@ -32,8 +32,7 @@ extension LocalizedHiddenContent on HiddenContent {
         HiddenContent.watchedHome => l10n.hideWatchedHome,
         HiddenContent.watchedSubscriptions => l10n.hideWatchedSubscriptions,
         HiddenContent.upcomingHome => l10n.hideUpcomingHome,
-        HiddenContent.upcomingSubscriptions =>
-          l10n.hideUpcomingSubscriptions,
+        HiddenContent.upcomingSubscriptions => l10n.hideUpcomingSubscriptions,
         HiddenContent.streamsSubscriptions => l10n.hideStreamsSubscriptions,
       };
 }

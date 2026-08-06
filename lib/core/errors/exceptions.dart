@@ -34,7 +34,8 @@ class AuthException extends AppException {
 /// Rate limiting
 class RateLimitException extends AppException {
   final Duration retryAfter;
-  const RateLimitException(super.message, {required this.retryAfter, super.cause});
+  const RateLimitException(super.message,
+      {required this.retryAfter, super.cause});
 }
 
 /// Not found

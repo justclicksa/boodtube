@@ -1,240 +1,394 @@
 // ============================================================
 // SettingsScreen - شجرة الإعدادات الكاملة
 // ============================================================
+// One long scroll with 18+ controls, so the rows are declared as data
+// (`_SettingsRow`) rather than inline widgets — that is what makes the
+// in-page search filter possible.
+// ============================================================
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../data/local/preferences/settings_repository_impl.dart';
 import '../../../domain/entities/content_filter.dart';
-import '../../../l10n/app_localizations.dart';
 import '../../../domain/entities/media_format.dart';
 import '../../../domain/entities/sponsor_segment.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../l10n/enum_labels.dart';
+import '../../l10n/locale_preference.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/settings_providers.dart';
+import '../../widgets/empty_view.dart';
 
-class SettingsScreen extends ConsumerWidget {
+/// The running build's own name and version, read from the platform
+/// instead of being retyped in the About section every release.
+final packageInfoProvider =
+    FutureProvider<PackageInfo>((ref) => PackageInfo.fromPlatform());
+
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(settingsControllerProvider);
-    final controller = ref.read(settingsControllerProvider.notifier);
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final signedIn = ref.watch(authControllerProvider) is SignedIn;
+    final sections = _buildSections(context);
+    final query = _query.trim().toLowerCase();
+
+    final children = <Widget>[];
+    for (final section in sections) {
+      // A section title match keeps the whole section, so searching
+      // "sponsor" does not hide the categories under that heading.
+      final titleMatches = section.title.toLowerCase().contains(query);
+      final rows = query.isEmpty || titleMatches
+          ? section.rows
+          : section.rows.where((row) => row.matches(query)).toList();
+      if (rows.isEmpty) continue;
+      if (children.isNotEmpty) children.add(const Divider());
+      children
+        ..add(_SectionHeader(title: section.title))
+        ..addAll(rows.map((row) => row.widget));
+    }
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.settingsTab)),
-      body: ListView(
-        children: [
-          // ============================================================
-          // Account
-          // ============================================================
-          _SectionHeader(title: l10n.accountSection),
-          ListTile(
-            leading: const Icon(Icons.account_circle_outlined),
-            title: Text(signedIn ? l10n.signedIn : l10n.signIn),
-            subtitle: Text(
-              signedIn ? l10n.signedInSubtitle : l10n.signInSubtitle,
-            ),
-            onTap: () => context.push('/sign-in'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.download_outlined),
-            title: Text(l10n.downloads),
-            subtitle: Text(l10n.downloadsSubtitle),
-            onTap: () => context.push('/downloads'),
-          ),
-
-          const Divider(),
-
-          // ============================================================
-          // General
-          // ============================================================
-          _SectionHeader(title: l10n.generalSection),
-          ListTile(
-            leading: const Icon(Icons.brightness_6),
-            title: Text(l10n.theme),
-            subtitle: Text(_themeLabel(l10n, settings.themeMode)),
-            onTap: () => _showThemePicker(context, settings, controller),
-          ),
-          ListTile(
-            leading: const Icon(Icons.language),
-            title: Text(l10n.language),
-            subtitle: Text(settings.language == 'ar' ? 'العربية' : 'English'),
-            onTap: () => _showLanguagePicker(context, settings, controller),
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.notifications),
-            title: Text(l10n.notifications),
-            value: settings.notificationsEnabled,
-            onChanged: controller.setNotificationsEnabled,
-          ),
-
-          const Divider(),
-
-          // ============================================================
-          // Player
-          // ============================================================
-          _SectionHeader(title: l10n.playerSection),
-          ListTile(
-            leading: const Icon(Icons.high_quality),
-            title: Text(l10n.defaultQuality),
-            subtitle: Text(settings.defaultQuality.label(l10n)),
-            onTap: () => _showQualityPicker(context, settings, controller),
-          ),
-          ListTile(
-            leading: const Icon(Icons.speed),
-            title: Text(l10n.defaultSpeed),
-            subtitle: Text('${settings.defaultSpeed}x'),
-            onTap: () => _showSpeedPicker(context, settings, controller),
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.headphones),
-            title: Text(l10n.backgroundPlayback),
-            subtitle: Text(l10n.backgroundPlaybackSubtitle),
-            value: settings.backgroundPlayback,
-            onChanged: controller.setBackgroundPlayback,
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.touch_app),
-            title: Text(l10n.doubleTapToSeek),
-            subtitle: Text(l10n.doubleTapToSeekSubtitle),
-            value: settings.doubleTapToSeek,
-            onChanged: controller.setDoubleTapToSeek,
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.picture_in_picture),
-            title: Text(l10n.pictureInPicture),
-            value: settings.pictureInPictureEnabled,
-            onChanged: controller.setPictureInPictureEnabled,
-          ),
-
-          const Divider(),
-
-          // ============================================================
-          // Feed — what shows up in Home / Subscriptions / Search
-          // ============================================================
-          _SectionHeader(title: l10n.feedSection),
-          ...HiddenContent.values.map(
-            (rule) => SwitchListTile(
-              title: Text(l10n.hideItem(rule.label(l10n))),
-              value: settings.hiddenContent.contains(rule),
-              onChanged: (hide) => controller.toggleHiddenContent(rule, hide),
+      appBar: AppBar(
+        title: Text(l10n.settingsTab),
+        bottom: PreferredSize(
+          // SearchBar's 56pt minimum plus the 12pt gap below it.
+          preferredSize: const Size.fromHeight(68),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: SearchBar(
+              controller: _searchController,
+              hintText: l10n.searchSettings,
+              leading: const Icon(Icons.search),
+              trailing: [
+                if (_query.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _query = '');
+                    },
+                  ),
+              ],
+              onChanged: (value) => setState(() => _query = value),
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.image_outlined),
-            title: Text(l10n.thumbnails),
-            subtitle: Text(settings.clickbaitThumbnail.label(l10n)),
-            onTap: () => _showClickbaitPicker(context, ref, settings),
+        ),
+      ),
+      body: children.isEmpty
+          ? EmptyView(
+              icon: Icons.search_off,
+              title: l10n.noSettingsMatch(_query.trim()),
+              action: TextButton(
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _query = '');
+                },
+                child: Text(l10n.clearAll),
+              ),
+            )
+          : ListView(children: children),
+    );
+  }
+
+  // ============================================================
+  // Rows
+  // ============================================================
+
+  List<_SettingsSection> _buildSections(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final settings = ref.watch(settingsControllerProvider);
+    final controller = ref.read(settingsControllerProvider.notifier);
+    final signedIn = ref.watch(authControllerProvider) is SignedIn;
+    final info = ref.watch(packageInfoProvider).valueOrNull;
+    final versionText =
+        info == null ? '—' : '${info.version}+${info.buildNumber}';
+
+    return [
+      _SettingsSection(
+        title: l10n.accountSection,
+        rows: [
+          _SettingsRow(
+            keywords: [
+              if (signedIn) l10n.signedIn else l10n.signIn,
+              if (signedIn) l10n.signedInSubtitle else l10n.signInSubtitle,
+            ],
+            widget: ListTile(
+              leading: const Icon(Icons.account_circle_outlined),
+              title: Text(signedIn ? l10n.signedIn : l10n.signIn),
+              subtitle: Text(
+                signedIn ? l10n.signedInSubtitle : l10n.signInSubtitle,
+              ),
+              onTap: () => context.push('/sign-in'),
+            ),
           ),
-          SwitchListTile(
-            secondary: const Icon(Icons.title),
-            title: Text(l10n.deArrow),
-            subtitle: Text(l10n.deArrowSubtitle),
-            value: settings.deArrowEnabled,
-            onChanged: controller.setDeArrowEnabled,
+          _SettingsRow(
+            keywords: [l10n.downloads, l10n.downloadsSubtitle],
+            widget: ListTile(
+              leading: const Icon(Icons.download_outlined),
+              title: Text(l10n.downloads),
+              subtitle: Text(l10n.downloadsSubtitle),
+              onTap: () => context.push('/downloads'),
+            ),
+          ),
+        ],
+      ),
+      _SettingsSection(
+        title: l10n.generalSection,
+        rows: [
+          _SettingsRow(
+            keywords: [l10n.theme, l10n.darkMode, l10n.light, l10n.dark],
+            widget: ListTile(
+              leading: const Icon(Icons.brightness_6),
+              title: Text(l10n.theme),
+              subtitle: Text(_themeLabel(l10n, settings.themeMode)),
+              onTap: () => _showThemePicker(settings, controller),
+            ),
+          ),
+          _SettingsRow(
+            keywords: [l10n.language, 'english', 'العربية', l10n.systemDefault],
+            widget: ListTile(
+              leading: const Icon(Icons.language),
+              title: Text(l10n.language),
+              subtitle: Text(_languageLabel(l10n, settings.language)),
+              onTap: () => _showLanguagePicker(settings, controller),
+            ),
+          ),
+          _SettingsRow(
+            keywords: [l10n.notifications],
+            widget: SwitchListTile(
+              secondary: const Icon(Icons.notifications),
+              title: Text(l10n.notifications),
+              value: settings.notificationsEnabled,
+              onChanged: controller.setNotificationsEnabled,
+            ),
+          ),
+        ],
+      ),
+      _SettingsSection(
+        title: l10n.playerSection,
+        rows: [
+          _SettingsRow(
+            keywords: [l10n.defaultQuality, l10n.quality],
+            widget: ListTile(
+              leading: const Icon(Icons.high_quality),
+              title: Text(l10n.defaultQuality),
+              subtitle: Text(settings.defaultQuality.label(l10n)),
+              onTap: () => _showQualityPicker(settings, controller),
+            ),
+          ),
+          _SettingsRow(
+            keywords: [l10n.defaultSpeed, l10n.playbackSpeed],
+            widget: ListTile(
+              leading: const Icon(Icons.speed),
+              title: Text(l10n.defaultSpeed),
+              subtitle: Text('${settings.defaultSpeed}x'),
+              onTap: () => _showSpeedPicker(settings, controller),
+            ),
+          ),
+          _SettingsRow(
+            keywords: [
+              l10n.backgroundPlayback,
+              l10n.backgroundPlaybackSubtitle,
+            ],
+            widget: SwitchListTile(
+              secondary: const Icon(Icons.headphones),
+              title: Text(l10n.backgroundPlayback),
+              subtitle: Text(l10n.backgroundPlaybackSubtitle),
+              value: settings.backgroundPlayback,
+              onChanged: controller.setBackgroundPlayback,
+            ),
+          ),
+          _SettingsRow(
+            keywords: [l10n.doubleTapToSeek, l10n.doubleTapToSeekSubtitle],
+            widget: SwitchListTile(
+              secondary: const Icon(Icons.touch_app),
+              title: Text(l10n.doubleTapToSeek),
+              subtitle: Text(l10n.doubleTapToSeekSubtitle),
+              value: settings.doubleTapToSeek,
+              onChanged: controller.setDoubleTapToSeek,
+            ),
+          ),
+          _SettingsRow(
+            keywords: [l10n.pictureInPicture],
+            widget: SwitchListTile(
+              secondary: const Icon(Icons.picture_in_picture),
+              title: Text(l10n.pictureInPicture),
+              value: settings.pictureInPictureEnabled,
+              onChanged: controller.setPictureInPictureEnabled,
+            ),
+          ),
+        ],
+      ),
+      _SettingsSection(
+        title: l10n.feedSection,
+        rows: [
+          for (final rule in HiddenContent.values)
+            _SettingsRow(
+              keywords: [rule.label(l10n), l10n.hideItem(rule.label(l10n))],
+              widget: SwitchListTile(
+                title: Text(l10n.hideItem(rule.label(l10n))),
+                value: settings.hiddenContent.contains(rule),
+                onChanged: (hide) => controller.toggleHiddenContent(rule, hide),
+              ),
+            ),
+          _SettingsRow(
+            keywords: [
+              l10n.thumbnails,
+              settings.clickbaitThumbnail.label(l10n),
+            ],
+            widget: ListTile(
+              leading: const Icon(Icons.image_outlined),
+              title: Text(l10n.thumbnails),
+              subtitle: Text(settings.clickbaitThumbnail.label(l10n)),
+              onTap: () => _showClickbaitPicker(settings),
+            ),
+          ),
+          _SettingsRow(
+            keywords: [l10n.deArrow, l10n.deArrowSubtitle],
+            widget: SwitchListTile(
+              secondary: const Icon(Icons.title),
+              title: Text(l10n.deArrow),
+              subtitle: Text(l10n.deArrowSubtitle),
+              value: settings.deArrowEnabled,
+              onChanged: controller.setDeArrowEnabled,
+            ),
           ),
           if (settings.blockedChannelIds.isNotEmpty)
-            ListTile(
-              leading: const Icon(Icons.block),
-              title: Text(l10n.blockedChannels),
-              subtitle:
-                  Text(l10n.blockedCount(settings.blockedChannelIds.length)),
-              trailing: TextButton(
-                onPressed: () {
-                  for (final id in {...settings.blockedChannelIds}) {
-                    controller.unblockChannel(id);
-                  }
-                },
-                child: Text(l10n.unblockAll),
+            _SettingsRow(
+              keywords: [l10n.blockedChannels, l10n.unblockAll],
+              widget: ListTile(
+                leading: const Icon(Icons.block),
+                title: Text(l10n.blockedChannels),
+                subtitle: Text(
+                  l10n.blockedCount(settings.blockedChannelIds.length),
+                ),
+                trailing: TextButton(
+                  onPressed: () {
+                    for (final id in {...settings.blockedChannelIds}) {
+                      controller.unblockChannel(id);
+                    }
+                  },
+                  child: Text(l10n.unblockAll),
+                ),
               ),
             ),
-
-          const Divider(),
-
-          // ============================================================
-          // SponsorBlock
-          // ============================================================
-          _SectionHeader(title: l10n.sponsorBlockSection),
-          SwitchListTile(
-            secondary: const Icon(Icons.skip_next),
-            title: Text(l10n.enableSponsorBlock),
-            subtitle: Text(l10n.enableSponsorBlockSubtitle),
-            value: settings.sponsorBlockEnabled,
-            onChanged: controller.setSponsorBlockEnabled,
+        ],
+      ),
+      _SettingsSection(
+        title: l10n.sponsorBlockSection,
+        rows: [
+          _SettingsRow(
+            keywords: [
+              l10n.enableSponsorBlock,
+              l10n.enableSponsorBlockSubtitle,
+            ],
+            widget: SwitchListTile(
+              secondary: const Icon(Icons.skip_next),
+              title: Text(l10n.enableSponsorBlock),
+              subtitle: Text(l10n.enableSponsorBlockSubtitle),
+              value: settings.sponsorBlockEnabled,
+              onChanged: controller.setSponsorBlockEnabled,
+            ),
           ),
           if (settings.sponsorBlockEnabled) ...[
-            SwitchListTile(
-              secondary: const Icon(Icons.fast_forward),
-              title: Text(l10n.autoSkipSponsors),
-              subtitle: Text(l10n.autoSkipSponsorsSubtitle),
-              value: settings.autoSkipSponsors,
-              onChanged: controller.setAutoSkipSponsors,
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Text(
-                l10n.sponsorSkipCategories,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+            _SettingsRow(
+              keywords: [l10n.autoSkipSponsors, l10n.autoSkipSponsorsSubtitle],
+              widget: SwitchListTile(
+                secondary: const Icon(Icons.fast_forward),
+                title: Text(l10n.autoSkipSponsors),
+                subtitle: Text(l10n.autoSkipSponsorsSubtitle),
+                value: settings.autoSkipSponsors,
+                onChanged: controller.setAutoSkipSponsors,
               ),
             ),
-            ...SponsorCategory.values.map((cat) => SwitchListTile(
+            _SettingsRow(
+              keywords: [l10n.sponsorSkipCategories],
+              widget: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: Text(
+                  l10n.sponsorSkipCategories,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            for (final cat in SponsorCategory.values)
+              _SettingsRow(
+                keywords: [cat.label(l10n), l10n.sponsorSkipCategories],
+                widget: SwitchListTile(
                   dense: true,
                   title: Text(cat.label(l10n)),
                   value: settings.sponsorCategories.contains(cat),
                   onChanged: (v) => controller.toggleSponsorCategory(cat, v),
-                )),
+                ),
+              ),
           ],
-
-          const Divider(),
-
-          // ============================================================
-          // About
-          // ============================================================
-          _SectionHeader(title: l10n.aboutSection),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: Text(l10n.version),
-            trailing: const Text('0.1.0+1'),
+        ],
+      ),
+      _SettingsSection(
+        title: l10n.aboutSection,
+        rows: [
+          _SettingsRow(
+            keywords: [l10n.version, versionText],
+            widget: ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: Text(l10n.version),
+              trailing: Text(versionText),
+            ),
           ),
-          ListTile(
-            leading: const Icon(Icons.system_update),
-            title: Text(l10n.checkForUpdates),
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(l10n.noUpdatesAvailable)),
-              );
-            },
+          _SettingsRow(
+            keywords: [l10n.checkForUpdates],
+            // Honest by construction: nothing in this build talks to an
+            // update server, so the row says so instead of pretending to
+            // have checked.
+            widget: ListTile(
+              enabled: false,
+              leading: const Icon(Icons.system_update),
+              title: Text(l10n.checkForUpdates),
+              subtitle: Text(l10n.updateCheckUnavailable),
+            ),
           ),
-          ListTile(
-            leading: const Icon(Icons.code),
-            title: Text(l10n.openSourceLicenses),
-            onTap: () {
-              showLicensePage(
-                context: context,
-                applicationName: 'SmartTube',
-                applicationVersion: '0.1.0+1',
-              );
-            },
+          _SettingsRow(
+            keywords: [l10n.openSourceLicenses],
+            widget: ListTile(
+              leading: const Icon(Icons.code),
+              title: Text(l10n.openSourceLicenses),
+              onTap: () {
+                showLicensePage(
+                  context: context,
+                  applicationName: l10n.appTitle,
+                  applicationVersion: versionText,
+                );
+              },
+            ),
           ),
         ],
       ),
-    );
+    ];
   }
 
   // ============================================================
   // Pickers
   // ============================================================
 
-  void _showThemePicker(
-    BuildContext context,
-    AppSettings settings,
-    SettingsController controller,
-  ) {
+  void _showThemePicker(AppSettings settings, SettingsController controller) {
     final l10n = AppLocalizations.of(context);
     showDialog<void>(
       context: context,
@@ -256,7 +410,6 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   void _showLanguagePicker(
-    BuildContext context,
     AppSettings settings,
     SettingsController controller,
   ) {
@@ -265,9 +418,9 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       builder: (context) => SimpleDialog(
         title: Text(l10n.language),
-        children: [
-          RadioListTile<String>(
-            value: 'en',
+        children: supportedLanguageCodes.map((code) {
+          return RadioListTile<String>(
+            value: code,
             groupValue: settings.language,
             onChanged: (v) {
               if (v != null) {
@@ -275,29 +428,14 @@ class SettingsScreen extends ConsumerWidget {
                 Navigator.pop(context);
               }
             },
-            title: const Text('English'),
-          ),
-          RadioListTile<String>(
-            value: 'ar',
-            groupValue: settings.language,
-            onChanged: (v) {
-              if (v != null) {
-                controller.setLanguage(v);
-                Navigator.pop(context);
-              }
-            },
-            title: const Text('العربية'),
-          ),
-        ],
+            title: Text(_languageLabel(l10n, code)),
+          );
+        }).toList(),
       ),
     );
   }
 
-  void _showQualityPicker(
-    BuildContext context,
-    AppSettings settings,
-    SettingsController controller,
-  ) {
+  void _showQualityPicker(AppSettings settings, SettingsController controller) {
     final l10n = AppLocalizations.of(context);
     showDialog<void>(
       context: context,
@@ -318,12 +456,8 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showSpeedPicker(
-    BuildContext context,
-    AppSettings settings,
-    SettingsController controller,
-  ) {
-    final speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+  void _showSpeedPicker(AppSettings settings, SettingsController controller) {
+    const speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
     final l10n = AppLocalizations.of(context);
     showDialog<void>(
       context: context,
@@ -344,11 +478,7 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showClickbaitPicker(
-    BuildContext context,
-    WidgetRef ref,
-    AppSettings settings,
-  ) {
+  void _showClickbaitPicker(AppSettings settings) {
     final l10n = AppLocalizations.of(context);
     showModalBottomSheet<void>(
       context: context,
@@ -386,11 +516,42 @@ class SettingsScreen extends ConsumerWidget {
         return l10n.dark;
     }
   }
+
+  /// Anything that is not one of the two shipped locales — including the
+  /// [systemLanguageCode] sentinel — follows the device.
+  String _languageLabel(AppLocalizations l10n, String code) => switch (code) {
+        'en' => 'English',
+        'ar' => 'العربية',
+        _ => l10n.systemDefault,
+      };
+}
+
+// ============================================================
+// Row model
+// ============================================================
+
+class _SettingsSection {
+  const _SettingsSection({required this.title, required this.rows});
+
+  final String title;
+  final List<_SettingsRow> rows;
+}
+
+class _SettingsRow {
+  const _SettingsRow({required this.keywords, required this.widget});
+
+  /// Everything the row says, matched against the settings search field.
+  final List<String> keywords;
+  final Widget widget;
+
+  bool matches(String lowercaseQuery) =>
+      keywords.any((k) => k.toLowerCase().contains(lowercaseQuery));
 }
 
 class _SectionHeader extends StatelessWidget {
-  final String title;
   const _SectionHeader({required this.title});
+
+  final String title;
 
   @override
   Widget build(BuildContext context) {

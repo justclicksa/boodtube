@@ -370,11 +370,16 @@
   "unsubscribed": "تم إلغاء الاشتراك",
   "noVideos": "لا توجد مقاطع",
   "noPlaylists": "لا توجد قوائم تشغيل بعد",
+  "channelHasNoPlaylists": "لم تنشر هذه القناة أي قوائم تشغيل",
   "channelIdLabel": "معرّف القناة",
   "subscribers": "المشتركون",
   "waitingForApproval": "بانتظار الموافقة…",
   "getSignInCode": "احصل على رمز تسجيل الدخول",
   "codeCopied": "تم نسخ الرمز",
+  "signInUnofficialWarning": "هذا التطبيق ليس عميلاً رسمياً ليوتيوب. قد تُقيّد Google الحسابات المستخدمة مع العملاء غير الرسمية أو توقفها. يُفضّل استخدام حساب ثانوي.",
+  "signInStepOpenPage": "١. افتح هذه الصفحة على أي جهاز",
+  "signInStepEnterCode": "٢. أدخل هذا الرمز",
+  "signedInKeystoreNote": "تُجدَّد الجلسة تلقائياً. يُخزَّن الرمز في مخزن مفاتيح الجهاز ولا يغادر هذا الهاتف.",
   "videos": "المقاطع",
   "streamCapped": "أوقف يوتيوب بث هذا المقطع في منتصفه. عادةً ما يكون مقيّدًا — جرّب جودة أخرى أو مقطعًا آخر.",
   "noPlaylistsSubtitle": "ستظهر هنا قوائم التشغيل التي تنشئها في يوتيوب",
@@ -405,5 +410,74 @@
         "type": "String"
       }
     }
-  }
+  },
+  "searchFilters": "عوامل التصفية",
+  "searchFilterUploadDate": "تاريخ الرفع",
+  "searchFilterType": "النوع",
+  "searchFilterDuration": "المدة",
+  "searchFilterSortBy": "الترتيب حسب",
+  "searchFilterAny": "الكل",
+  "uploadDateLastHour": "آخر ساعة",
+  "uploadDateToday": "اليوم",
+  "uploadDateThisWeek": "هذا الأسبوع",
+  "uploadDateThisMonth": "هذا الشهر",
+  "uploadDateThisYear": "هذه السنة",
+  "searchTypeVideo": "فيديو",
+  "searchTypeMovie": "فيلم",
+  "searchDurationShort": "أقل من ٤ دقائق",
+  "searchDurationMedium": "من ٤ إلى ٢٠ دقيقة",
+  "searchDurationLong": "أكثر من ٢٠ دقيقة",
+  "sortByRelevance": "الأكثر صلة",
+  "sortByUploadDate": "تاريخ الرفع",
+  "sortByViewCount": "عدد المشاهدات",
+  "sortByRating": "التقييم",
+  "resetFilters": "إعادة تعيين",
+  "clearFilters": "مسح عوامل التصفية",
+  "activeFilterCount": "{count, plural, =1{عامل تصفية واحد} =2{عاملا تصفية} few{{count} عوامل تصفية} other{{count} عامل تصفية}}",
+  "@activeFilterCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noResultsSubtitle": "جرّب كلمات أخرى أو امسح عوامل التصفية.",
+  "removeFromHistory": "إزالة من السجل",
+  "errorNotFound": "المحتوى غير موجود",
+  "errorUnauthorized": "تحتاج إلى تسجيل الدخول لعرض هذا",
+  "errorRateLimited": "طلبات كثيرة — حاول بعد قليل",
+  "errorParse": "تعذّرت قراءة رد يوتيوب",
+  "errorDatabase": "تعذّرت قراءة البيانات المحلية",
+  "errorYouTube": "تعذّر على يوتيوب تحميل هذا الآن",
+  "offlineTitle": "أنت غير متصل بالإنترنت",
+  "offlineSubtitle": "في انتظار الاتصال…",
+  "backOnline": "عاد الاتصال",
+  "systemDefault": "لغة النظام",
+  "searchSettings": "ابحث في الإعدادات",
+  "noSettingsMatch": "لا توجد إعدادات تطابق \"{query}\"",
+  "@noSettingsMatch": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "updateCheckUnavailable": "التحقق التلقائي من التحديثات غير متاح في هذه النسخة",
+  "shortsEmpty": "لا توجد شورتس متاحة حاليًا",
+  "shortsLoadFailed": "تعذّر تحميل الشورتس",
+  "shortsDislike": "عدم إعجاب",
+  "shortsOpenChannel": "فتح القناة",
+  "play": "تشغيل",
+  "pause": "إيقاف مؤقّت",
+  "close": "إغلاق",
+  "fullscreen": "ملء الشاشة",
+  "exitFullscreen": "إنهاء ملء الشاشة",
+  "videoOptions": "خيارات أخرى",
+  "notInterested": "لا يهمّني",
+  "blockChannel": "لا تقترح هذه القناة",
+  "goToChannel": "الانتقال إلى القناة",
+  "miniPlayerLabel": "يُشغَّل الآن: {title}",
+  "seekSeconds": "{count, plural, =1{ثانية واحدة} =2{ثانيتان} few{{count} ثوانٍ} other{{count} ثانية}}",
+  "viewReplies": "{count, plural, =1{عرض ردّ واحد} =2{عرض ردّين} few{عرض {count} ردود} other{عرض {count} ردّ}}",
+  "continueWatching": "تابع المشاهدة"
 }

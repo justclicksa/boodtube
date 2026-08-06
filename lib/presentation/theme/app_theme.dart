@@ -9,6 +9,36 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+/// The app's spacing scale.
+///
+/// Padding and gaps come from here rather than from an inline number, so
+/// the same rhythm holds across screens and one change moves all of it.
+class AppSpacing {
+  const AppSpacing._();
+
+  /// 4 — hairline gaps inside a text block.
+  static const double xs = 4;
+
+  /// 8 — between related widgets in a row.
+  static const double sm = 8;
+
+  /// 12 — list row insets, avatar to text.
+  static const double md = 12;
+
+  /// 16 — the default screen and card inset.
+  static const double lg = 16;
+
+  /// 24 — between sections.
+  static const double xl = 24;
+
+  /// 32 — around a centred empty or error state.
+  static const double xxl = 32;
+
+  /// Smallest tap target that passes the accessibility guidance on both
+  /// stores. Anything interactive should be at least this on both axes.
+  static const double minTapTarget = 48;
+}
+
 class YouTubeColors {
   const YouTubeColors._();
 
@@ -210,7 +240,10 @@ class AppTheme {
         selectedColor: tokens.chipSelectedBackground,
         side: BorderSide.none,
         shape: const StadiumBorder(),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: 6,
+        ),
         labelStyle: textTheme.labelLarge?.copyWith(
           fontSize: 14,
           fontWeight: FontWeight.w500,
@@ -233,7 +266,7 @@ class AppTheme {
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           minimumSize: const Size(0, 36),
         ),
       ),
@@ -244,7 +277,9 @@ class AppTheme {
             : YouTubeColors.lightBackground,
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppSpacing.lg),
+          ),
         ),
       ),
       listTileTheme: ListTileThemeData(

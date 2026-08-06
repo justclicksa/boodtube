@@ -134,9 +134,8 @@ class StreamProxy {
       final end = (requestedEnd ?? total - 1).clamp(start, total - 1);
 
       final res = request.response;
-      res.statusCode = rangeHeader == null
-          ? HttpStatus.ok
-          : HttpStatus.partialContent;
+      res.statusCode =
+          rangeHeader == null ? HttpStatus.ok : HttpStatus.partialContent;
       res.headers
         ..set(HttpHeaders.acceptRangesHeader, 'bytes')
         ..set(HttpHeaders.contentTypeHeader, info.contentType);

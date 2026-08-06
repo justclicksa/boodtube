@@ -370,11 +370,16 @@
   "unsubscribed": "Unsubscribed",
   "noVideos": "No videos",
   "noPlaylists": "No playlists yet",
+  "channelHasNoPlaylists": "This channel hasn't published any playlists",
   "channelIdLabel": "Channel ID",
   "subscribers": "Subscribers",
   "waitingForApproval": "Waiting for approval…",
   "getSignInCode": "Get a sign-in code",
   "codeCopied": "Code copied",
+  "signInUnofficialWarning": "This app is not an official YouTube client. Google may restrict or suspend accounts used with unofficial clients. Consider using a secondary account.",
+  "signInStepOpenPage": "1. Open this page on any device",
+  "signInStepEnterCode": "2. Enter this code",
+  "signedInKeystoreNote": "The session refreshes automatically. Your token is stored in the device keystore and never leaves this phone.",
   "videos": "Videos",
   "streamCapped": "YouTube stopped serving this video part-way through. It is usually restricted — try another quality, or another video.",
   "noPlaylistsSubtitle": "Playlists you create on YouTube show up here",
@@ -405,5 +410,95 @@
         "type": "String"
       }
     }
-  }
+  },
+  "searchFilters": "Filters",
+  "searchFilterUploadDate": "Upload date",
+  "searchFilterType": "Type",
+  "searchFilterDuration": "Duration",
+  "searchFilterSortBy": "Sort by",
+  "searchFilterAny": "Any",
+  "uploadDateLastHour": "Last hour",
+  "uploadDateToday": "Today",
+  "uploadDateThisWeek": "This week",
+  "uploadDateThisMonth": "This month",
+  "uploadDateThisYear": "This year",
+  "searchTypeVideo": "Video",
+  "searchTypeMovie": "Movie",
+  "searchDurationShort": "Under 4 minutes",
+  "searchDurationMedium": "4–20 minutes",
+  "searchDurationLong": "Over 20 minutes",
+  "sortByRelevance": "Relevance",
+  "sortByUploadDate": "Upload date",
+  "sortByViewCount": "View count",
+  "sortByRating": "Rating",
+  "resetFilters": "Reset",
+  "clearFilters": "Clear filters",
+  "activeFilterCount": "{count, plural, =1{1 filter} other{{count} filters}}",
+  "@activeFilterCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "noResultsSubtitle": "Try different keywords, or clear your filters.",
+  "removeFromHistory": "Remove from history",
+  "errorNotFound": "Content not found",
+  "errorUnauthorized": "You need to sign in to view this",
+  "errorRateLimited": "Too many requests — try again in a moment",
+  "errorParse": "YouTube sent something we could not read",
+  "errorDatabase": "Could not read local data",
+  "errorYouTube": "YouTube could not load this right now",
+  "offlineTitle": "You're offline",
+  "offlineSubtitle": "Waiting for a connection…",
+  "backOnline": "Back online",
+  "systemDefault": "System default",
+  "searchSettings": "Search settings",
+  "noSettingsMatch": "No settings match \"{query}\"",
+  "@noSettingsMatch": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "updateCheckUnavailable": "Automatic update checks aren't available in this build",
+  "shortsEmpty": "No Shorts available right now",
+  "shortsLoadFailed": "Couldn't load Shorts",
+  "shortsDislike": "Dislike",
+  "shortsOpenChannel": "Open channel",
+  "play": "Play",
+  "pause": "Pause",
+  "close": "Close",
+  "fullscreen": "Fullscreen",
+  "exitFullscreen": "Exit fullscreen",
+  "videoOptions": "More options",
+  "notInterested": "Not interested",
+  "blockChannel": "Don't recommend this channel",
+  "goToChannel": "Go to channel",
+  "miniPlayerLabel": "Now playing: {title}",
+  "@miniPlayerLabel": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "seekSeconds": "{count, plural, =1{1 second} other{{count} seconds}}",
+  "@seekSeconds": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "viewReplies": "{count, plural, =1{View 1 reply} other{View {count} replies}}",
+  "@viewReplies": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "continueWatching": "Continue watching"
 }

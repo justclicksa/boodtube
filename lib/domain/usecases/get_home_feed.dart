@@ -12,5 +12,6 @@ class GetHomeFeed {
   final ContentRepository _repo;
   const GetHomeFeed(this._repo);
 
-  Future<Result<List<MediaGroup>>> call() => _repo.getHomeFeed();
+  Future<Result<List<MediaGroup>>> call({String? pageToken}) =>
+      _repo.getHomeFeed(pageToken: pageToken);
 }

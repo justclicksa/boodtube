@@ -38,6 +38,9 @@ typedef HistoryEntry = ({MediaItem item, int? percentWatched});
 /// One section of YouTube's own sidebar, with the id that loads it.
 typedef GuideEntry = ({String title, String browseId, String? iconType});
 
+/// One page of a feed plus the continuation that fetches the next one.
+typedef FeedPage = ({List<MediaItem> items, String? continuation});
+
 class AuthenticatedInnerTubeClient {
   AuthenticatedInnerTubeClient(this._dio, this._accessToken, {String? locale})
       : _locale = locale ?? 'en';
@@ -85,8 +88,7 @@ class AuthenticatedInnerTubeClient {
             'Content-Type': 'application/json',
             'X-Goog-Api-Format-Version': '1',
             // Identify as the TV surface these tokens belong to.
-            'User-Agent':
-                'Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version',
+            'User-Agent': 'Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version',
           },
           // InnerTube answers 4xx with a JSON body worth reading.
           validateStatus: (status) => status != null && status < 500,
@@ -103,15 +105,32 @@ class AuthenticatedInnerTubeClient {
     }
   }
 
+  /// True while a token can be obtained — i.e. the account is usable.
+  ///
+  /// Callers that mirror an action to YouTube use this to tell "the
+  /// request failed" apart from "there is no account to mirror to".
+  Future<bool> isSignedIn() async => await _accessToken() != null;
+
   /// The signed-in user's subscription feed. Null when signed out or the
   /// request failed, so callers can fall back to the local list.
   Future<List<MediaItem>?> getSubscriptionsFeed() async {
-    final data = await _post('browse', {'browseId': 'FEsubscriptions'});
+    final page = await getSubscriptionsFeedPage();
+    return page?.items;
+  }
+
+  /// One page of the subscription feed, with its continuation.
+  Future<FeedPage?> getSubscriptionsFeedPage({String? continuation}) async {
+    final data = await _post(
+      'browse',
+      continuation == null
+          ? {'browseId': 'FEsubscriptions'}
+          : {'continuation': continuation},
+    );
     if (data == null) return null;
     final videos = _extractVideos(data);
     debugPrint('InnerTube subscriptions: ${videos.length} videos '
         '(response keys: ${data.keys.take(8).join(",")})');
-    return videos;
+    return (items: videos, continuation: _continuationToken(data));
   }
 
   /// The personalised home feed.
@@ -120,24 +139,38 @@ class AuthenticatedInnerTubeClient {
   /// app. YouTube hands back a continuation token; following it a few
   /// times gets the feed to a comparable depth.
   Future<List<MediaItem>?> getHomeFeed({int pages = 3}) async {
-    final data = await _post('browse', {'browseId': 'FEwhat_to_watch'});
-    if (data == null) return null;
+    final first = await getHomeFeedPage();
+    if (first == null) return null;
 
-    final videos = _extractVideos(data);
-    var token = _continuationToken(data);
+    final videos = first.items;
+    var token = first.continuation;
 
     for (var page = 1; page < pages && token != null; page++) {
-      final next = await _post('browse', {'continuation': token});
-      if (next == null) break;
-      final more = _extractVideos(next);
-      if (more.isEmpty) break;
+      final next = await getHomeFeedPage(continuation: token);
+      if (next == null || next.items.isEmpty) break;
       final seen = videos.map((v) => v.videoId).toSet();
-      videos.addAll(more.where((v) => seen.add(v.videoId)));
-      token = _continuationToken(next);
+      videos.addAll(next.items.where((v) => seen.add(v.videoId)));
+      token = next.continuation;
     }
 
     debugPrint('InnerTube home: ${videos.length} videos');
     return videos;
+  }
+
+  /// One page of the personalised home feed, with the continuation that
+  /// fetches the next one. This is what an infinite feed scrolls on.
+  Future<FeedPage?> getHomeFeedPage({String? continuation}) async {
+    final data = await _post(
+      'browse',
+      continuation == null
+          ? {'browseId': 'FEwhat_to_watch'}
+          : {'continuation': continuation},
+    );
+    if (data == null) return null;
+    return (
+      items: _extractVideos(data),
+      continuation: _continuationToken(data)
+    );
   }
 
   /// The token that fetches the next page of a feed, wherever YouTube
@@ -194,8 +227,7 @@ class AuthenticatedInnerTubeClient {
         iconType: icon is Map ? icon['iconType'] as String? : null,
       ));
     });
-    final summary =
-        entries.map((e) => '${e.iconType}=${e.browseId}').join(' ');
+    final summary = entries.map((e) => '${e.iconType}=${e.browseId}').join(' ');
     debugPrint('InnerTube guide: $summary');
     return entries;
   }
@@ -301,20 +333,53 @@ class AuthenticatedInnerTubeClient {
 
   /// Videos under an arbitrary browse id — the sidebar sections use this.
   Future<List<MediaItem>?> browseVideos(String browseId) async {
-    final data = await _post('browse', {'browseId': browseId});
+    final page = await browseVideosPage(browseId);
+    return page?.items;
+  }
+
+  /// One page of an arbitrary browse id, with its continuation.
+  Future<FeedPage?> browseVideosPage(
+    String browseId, {
+    String? continuation,
+  }) async {
+    final data = await _post(
+      'browse',
+      continuation == null
+          ? {'browseId': browseId}
+          : {'continuation': continuation},
+    );
     if (data == null) return null;
     final videos = _extractVideos(data);
     debugPrint('InnerTube browse $browseId: ${videos.length} videos');
-    return videos;
+    return (items: videos, continuation: _continuationToken(data));
   }
 
   /// Search, through InnerTube rather than by scraping the results page.
-  Future<List<MediaItem>?> search(String query) async {
-    final data = await _post('search', {'query': query});
+  Future<List<MediaItem>?> search(String query, {String? params}) async {
+    final page = await searchPage(query, params: params);
+    return page?.items;
+  }
+
+  /// One page of search results, with its continuation.
+  ///
+  /// [params] is YouTube's `sp` filter value — the same protobuf the
+  /// results page uses — so the signed-in path honours the same upload
+  /// date / type / duration / sort filters as the scraped one.
+  Future<FeedPage?> searchPage(
+    String query, {
+    String? params,
+    String? continuation,
+  }) async {
+    final data = await _post('search', {
+      if (continuation == null) 'query': query,
+      if (continuation == null && params != null && params.isNotEmpty)
+        'params': params,
+      if (continuation != null) 'continuation': continuation,
+    });
     if (data == null) return null;
     final videos = _extractVideos(data);
     debugPrint('InnerTube search "$query": ${videos.length} videos');
-    return videos;
+    return (items: videos, continuation: _continuationToken(data));
   }
 
   /// The channels the user actually subscribes to on YouTube.
@@ -352,7 +417,11 @@ class AuthenticatedInnerTubeClient {
       );
       final title = lines.isNotEmpty ? lines.first : null;
       if (title == null || title.trim().isEmpty) return;
-      channels.add((channelId: channelId, title: title, avatarUrl: null));
+      channels.add((
+        channelId: channelId,
+        title: title,
+        avatarUrl: _channelAvatarUrl(tile),
+      ));
     });
 
     debugPrint('InnerTube channels: ${channels.length} from feed tiles');
@@ -459,8 +528,8 @@ class AuthenticatedInnerTubeClient {
             _browsePlaylistId(renderer['navigationEndpoint']);
         if (id == null || !seen.add(id)) continue;
 
-        final title = _text(renderer['title']) ??
-            _tileTitle(renderer['metadata']);
+        final title =
+            _text(renderer['title']) ?? _tileTitle(renderer['metadata']);
         if (title == null || title.trim().isEmpty) continue;
 
         playlists.add((
@@ -480,8 +549,7 @@ class AuthenticatedInnerTubeClient {
   /// The videos inside a playlist. Accepts a bare playlist id; YouTube
   /// browses playlists under a "VL" prefix.
   Future<List<MediaItem>?> getPlaylistVideos(String playlistId) async {
-    final browseId =
-        playlistId.startsWith('VL') ? playlistId : 'VL$playlistId';
+    final browseId = playlistId.startsWith('VL') ? playlistId : 'VL$playlistId';
     final data = await _post('browse', {'browseId': browseId});
     if (data == null) return null;
     final videos = _extractVideos(data);
@@ -583,20 +651,27 @@ class AuthenticatedInnerTubeClient {
     }
   }
 
-  Future<bool> like(String videoId) =>
-      _action('like/like', {'target': {'videoId': videoId}});
+  Future<bool> like(String videoId) => _action('like/like', {
+        'target': {'videoId': videoId}
+      });
 
-  Future<bool> removeLike(String videoId) =>
-      _action('like/removelike', {'target': {'videoId': videoId}});
+  Future<bool> removeLike(String videoId) => _action('like/removelike', {
+        'target': {'videoId': videoId}
+      });
 
-  Future<bool> dislike(String videoId) =>
-      _action('like/dislike', {'target': {'videoId': videoId}});
+  Future<bool> dislike(String videoId) => _action('like/dislike', {
+        'target': {'videoId': videoId}
+      });
 
   Future<bool> subscribe(String channelId) =>
-      _action('subscription/subscribe', {'channelIds': [channelId]});
+      _action('subscription/subscribe', {
+        'channelIds': [channelId]
+      });
 
   Future<bool> unsubscribe(String channelId) =>
-      _action('subscription/unsubscribe', {'channelIds': [channelId]});
+      _action('subscription/unsubscribe', {
+        'channelIds': [channelId]
+      });
 
   Future<bool> _action(String endpoint, Map<String, dynamic> body) async {
     final data = await _post(endpoint, body);
@@ -667,6 +742,7 @@ class AuthenticatedInnerTubeClient {
       title: title,
       author: lines.isNotEmpty ? lines.first : '',
       channelId: _tileChannelId(tile) ?? '',
+      channelAvatarUrl: _channelAvatarUrl(tile),
       thumbnailUrl: 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
       duration: _parseDuration(_tileDuration(tile['header'])),
       publishedAt: _parseRelativeDate(ageLine),
@@ -705,14 +781,26 @@ class AuthenticatedInnerTubeClient {
 
     final lower = text.toLowerCase();
     final days = switch (lower) {
-      _ when lower.contains('year') || text.contains('سنة') ||
-          text.contains('سنوات') => amount * 365,
-      _ when lower.contains('month') || text.contains('شهر') ||
-          text.contains('أشهر') => amount * 30,
-      _ when lower.contains('week') || text.contains('أسبوع') ||
-          text.contains('أسابيع') => amount * 7,
-      _ when lower.contains('day') || text.contains('يوم') ||
-          text.contains('أيام') => amount,
+      _
+          when lower.contains('year') ||
+              text.contains('سنة') ||
+              text.contains('سنوات') =>
+        amount * 365,
+      _
+          when lower.contains('month') ||
+              text.contains('شهر') ||
+              text.contains('أشهر') =>
+        amount * 30,
+      _
+          when lower.contains('week') ||
+              text.contains('أسبوع') ||
+              text.contains('أسابيع') =>
+        amount * 7,
+      _
+          when lower.contains('day') ||
+              text.contains('يوم') ||
+              text.contains('أيام') =>
+        amount,
       _ => 0,
     };
     if (days > 0) return now.subtract(Duration(days: days));
@@ -756,6 +844,7 @@ class AuthenticatedInnerTubeClient {
       title: title,
       author: _text(byline) ?? '',
       channelId: _navigationChannelId(_firstRunEndpoint(byline)) ?? '',
+      channelAvatarUrl: _channelAvatarUrl(renderer),
       thumbnailUrl: 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
       duration: _parseDuration(_text(renderer['lengthText'])),
       publishedAt: DateTime.now(),
@@ -784,9 +873,8 @@ class AuthenticatedInnerTubeClient {
   /// Flattens tileMetadataRenderer.lines into plain strings. Accepts
   /// either the lines array or the renderer that holds it.
   static List<String> _tileLines(dynamic source) {
-    final lines = source is Map && source['lines'] != null
-        ? source['lines']
-        : source;
+    final lines =
+        source is Map && source['lines'] != null ? source['lines'] : source;
     if (lines is! List) return const [];
     final result = <String>[];
     for (final line in lines) {
@@ -869,6 +957,63 @@ class AuthenticatedInnerTubeClient {
     if (runs is! List || runs.isEmpty) return null;
     final first = runs.first;
     return first is Map ? first['navigationEndpoint'] : null;
+  }
+
+  /// The channel's avatar, when the renderer carries one.
+  ///
+  /// Only the keys that specifically mean "this channel's picture" are
+  /// read — never the video thumbnail sitting next to them — so a
+  /// renderer without an avatar yields null and the card falls back to
+  /// the channel initial.
+  static const _channelAvatarKeys = [
+    'channelThumbnailSupportedRenderers',
+    'channelThumbnailWithLinkRenderer',
+    'channelThumbnail',
+    'channelAvatar',
+    'decoratedAvatarViewModel',
+    'avatarViewModel',
+    'avatar',
+  ];
+
+  static String? _channelAvatarUrl(Map<String, dynamic> renderer) {
+    String? found;
+    _walk(renderer, (node) {
+      if (found != null) return;
+      for (final key in _channelAvatarKeys) {
+        final value = node[key];
+        if (value == null) continue;
+        // The avatar node is itself a wrapper on some surfaces, so look
+        // for the image inside whatever this key holds.
+        final url = _imageUrl(value) ??
+            (value is Map<String, dynamic> ? _deepImageUrl(value) : null);
+        if (url != null) {
+          found = url;
+          return;
+        }
+      }
+    });
+    return found;
+  }
+
+  /// The first image found anywhere under an avatar wrapper.
+  static String? _deepImageUrl(Map<String, dynamic> node) {
+    String? found;
+    _walk(node, (child) {
+      found ??= _imageUrl(child);
+    });
+    return found;
+  }
+
+  /// Largest image out of a node holding either `thumbnails` (classic
+  /// renderers) or `sources` (the newer view models).
+  static String? _imageUrl(dynamic node) {
+    if (node is! Map) return null;
+    if (node['thumbnails'] is List) return _thumbnailUrl(node);
+    final sources = node['sources'];
+    if (sources is List) return _thumbnailUrl({'thumbnails': sources});
+    final image = node['image'];
+    if (image is Map) return _imageUrl(image);
+    return null;
   }
 
   /// Largest thumbnail out of a `{thumbnails:[{url,width}]}` node.

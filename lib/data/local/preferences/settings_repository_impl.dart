@@ -92,7 +92,8 @@ class AppSettings {
       autoSkipSponsors: autoSkipSponsors ?? this.autoSkipSponsors,
       language: language ?? this.language,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
-      pictureInPictureEnabled: pictureInPictureEnabled ?? this.pictureInPictureEnabled,
+      pictureInPictureEnabled:
+          pictureInPictureEnabled ?? this.pictureInPictureEnabled,
       doubleTapToSeek: doubleTapToSeek ?? this.doubleTapToSeek,
       hiddenContent: hiddenContent ?? this.hiddenContent,
       blockedChannelIds: blockedChannelIds ?? this.blockedChannelIds,
@@ -178,7 +179,8 @@ class SettingsRepository {
     await _prefs.setString(_keySponsorCategories, values);
   }
 
-  Future<void> toggleSponsorCategory(SponsorCategory category, bool enabled) async {
+  Future<void> toggleSponsorCategory(
+      SponsorCategory category, bool enabled) async {
     // FIXED: create new mutable set (not const)
     final current = {..._readSponsorCategories()};
     if (enabled) {

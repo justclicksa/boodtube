@@ -11,6 +11,7 @@ import 'package:dio/dio.dart';
 
 import 'package:smarttube_poc/core/network/stream_proxy.dart';
 import 'package:smarttube_poc/data/dearrow/dearrow_service.dart';
+import 'package:smarttube_poc/data/youtube/channel_browse_client.dart';
 import 'package:smarttube_poc/data/youtube/comments_service.dart';
 import 'package:smarttube_poc/data/youtube/return_dislike_service.dart';
 import 'package:smarttube_poc/data/youtube/innertube_client.dart';
@@ -30,15 +31,34 @@ import 'package:smarttube_poc/services/history_sync.dart';
 // Infrastructure providers
 // ============================================================
 
+/// The HTTP client youtube_explode scrapes through.
+///
+/// Held separately so [ChannelBrowseClient] can send its InnerTube
+/// requests through the same one — same cookies, same retry, same
+/// consent handling — instead of standing up a second stack that
+/// YouTube would see as a different visitor. [YoutubeExplode.close]
+/// closes it; both providers live for the life of the app, so that
+/// happens exactly once.
+final youtubeHttpClientProvider = Provider<YoutubeHttpClient>((ref) {
+  return YoutubeHttpClient();
+});
+
 /// YouTube API client
 final youtubeExplodeProvider = Provider<YoutubeExplode>((ref) {
-  final yt = YoutubeExplode();
+  final yt = YoutubeExplode(httpClient: ref.watch(youtubeHttpClientProvider));
   ref.onDispose(yt.close);
   return yt;
 });
 
+final channelBrowseClientProvider = Provider<ChannelBrowseClient>((ref) {
+  return ChannelBrowseClient(ref.watch(youtubeHttpClientProvider));
+});
+
 final innerTubeClientProvider = Provider<InnerTubeClient>((ref) {
-  return InnerTubeClient(ref.watch(youtubeExplodeProvider));
+  return InnerTubeClient(
+    ref.watch(youtubeExplodeProvider),
+    ref.watch(channelBrowseClientProvider),
+  );
 });
 
 final streamResolverProvider = Provider<StreamResolver>((ref) {

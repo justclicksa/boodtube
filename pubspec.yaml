@@ -63,6 +63,8 @@ dependencies:
   rxdart: ^0.28.0
   url_launcher: ^6.3.0
   path_provider: ^2.1.0
+  share_plus: ^10.0.0
+  connectivity_plus: ^6.0.0
 
   # Background updates
   package_info_plus: ^8.0.0

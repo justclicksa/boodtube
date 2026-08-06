@@ -15,8 +15,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../l10n/enum_labels.dart';
 import '../../../providers/player_providers.dart';
 import '../../../providers/settings_providers.dart';
-
-const _sheetBackground = Color(0xFF212121);
+import '../../../theme/app_theme.dart';
 
 /// Opens the playback menu.
 ///
@@ -26,15 +25,14 @@ const _sheetBackground = Color(0xFF212121);
 /// push, which silently does nothing: the submenu never appeared and the
 /// tap fell through to the page behind the sheet.
 Future<void> showPlayerSettings(BuildContext context) {
+  // Surface and shape both come from the theme's bottomSheetTheme, so
+  // this sheet is dark in the dark theme and light in the light one —
+  // it used to be a hardcoded #212121 with white text on top of it.
   return showModalBottomSheet<void>(
     context: context,
-    backgroundColor: _sheetBackground,
     isScrollControlled: true,
     constraints: BoxConstraints(
       maxHeight: MediaQuery.sizeOf(context).height * 0.75,
-    ),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
     builder: (_) => const _SettingsSheet(),
   );
@@ -162,8 +160,7 @@ class _RootMenu extends ConsumerWidget {
             _MenuRow(
               icon: Icons.queue_music,
               title: l10n.playbackQueue,
-              value:
-                  state.queue.isEmpty ? l10n.empty : '${state.queue.length}',
+              value: state.queue.isEmpty ? l10n.empty : '${state.queue.length}',
               enabled: state.queue.isNotEmpty,
               onTap: () => onOpen(_SheetPage.queue),
             ),
@@ -218,7 +215,7 @@ class _QualityMenu extends ConsumerWidget {
           ListTile(
             title: Text(
               l10n.noAlternativesAvailable,
-              style: const TextStyle(color: Colors.white70),
+              style: TextStyle(color: Theme.of(context).yt.secondaryText),
             ),
           ),
         for (final h in heights)
@@ -231,12 +228,9 @@ class _QualityMenu extends ConsumerWidget {
                 : current != null && current.startsWith('${h}p'),
             trailing: pending == h
                 ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white70,
-                    ),
+                    width: AppSpacing.lg,
+                    height: AppSpacing.lg,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : null,
             onTap: () {
@@ -436,6 +430,7 @@ class _SponsorBlockMenu extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     final settings = ref.watch(settingsControllerProvider);
     final notifier = ref.read(settingsControllerProvider.notifier);
 
@@ -444,34 +439,25 @@ class _SponsorBlockMenu extends ConsumerWidget {
       title: l10n.sponsorBlockSection,
       children: [
         SwitchListTile(
-          title: Text(
-            l10n.enableSponsorBlock,
-            style: const TextStyle(color: Colors.white),
-          ),
+          title: Text(l10n.enableSponsorBlock),
           value: settings.sponsorBlockEnabled,
           onChanged: notifier.setSponsorBlockEnabled,
         ),
         SwitchListTile(
-          title: Text(
-            l10n.skipAutomatically,
-            style: const TextStyle(color: Colors.white),
-          ),
+          title: Text(l10n.skipAutomatically),
           subtitle: Text(
             l10n.skipAutomaticallySubtitle,
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
+            style: theme.textTheme.bodySmall,
           ),
           value: settings.autoSkipSponsors,
           onChanged: settings.sponsorBlockEnabled
               ? notifier.setAutoSkipSponsors
               : null,
         ),
-        const Divider(color: Colors.white24),
+        const Divider(),
         for (final category in SponsorCategory.values)
           CheckboxListTile(
-            title: Text(
-              category.label(l10n),
-              style: const TextStyle(color: Colors.white),
-            ),
+            title: Text(category.label(l10n)),
             value: settings.sponsorCategories.contains(category),
             onChanged: settings.sponsorBlockEnabled
                 ? (v) => notifier.toggleSponsorCategory(category, v ?? false)
@@ -516,10 +502,15 @@ class _VolumeMenu extends ConsumerWidget {
             },
           ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+          padding: const EdgeInsetsDirectional.fromSTEB(
+            20,
+            AppSpacing.sm,
+            20,
+            AppSpacing.lg,
+          ),
           child: Text(
             l10n.volumeBoostWarning,
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
       ],
@@ -544,18 +535,18 @@ class _QueueMenu extends ConsumerWidget {
       children: [
         for (final item in queue)
           ListTile(
+            minTileHeight: AppSpacing.minTapTarget,
             title: Text(
               item.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white),
             ),
-            subtitle: Text(
-              item.author,
-              style: const TextStyle(color: Colors.white54),
-            ),
+            subtitle: Text(item.author),
             trailing: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white54),
+              // "Delete" ships translated with the framework, so the
+              // button gets a tooltip without a new app string.
+              tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
+              icon: const Icon(Icons.close),
               onPressed: () => notifier.removeFromQueue(item.videoId),
             ),
           ),
@@ -682,25 +673,37 @@ class _StatRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 130,
-            child: Text(
-              label,
-              style: const TextStyle(color: Colors.white54, fontSize: 13),
+    final theme = Theme.of(context);
+    // Two columns; read as one fact.
+    return Semantics(
+      label: '$label: $value',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 130,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: theme.yt.secondaryText,
+                  fontSize: 13,
+                ),
+              ),
             ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+            Expanded(
+              child: Text(
+                value,
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface,
+                  fontSize: 13,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -717,10 +720,10 @@ class _SheetGrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 36,
-      height: 4,
+      height: AppSpacing.xs,
       margin: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white24,
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24),
         borderRadius: BorderRadius.circular(2),
       ),
     );
@@ -746,19 +749,30 @@ class _SubSheet extends StatelessWidget {
           children: [
             const _SheetGrip(),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              padding: const EdgeInsetsDirectional.fromSTEB(
+                20,
+                AppSpacing.xs,
+                20,
+                AppSpacing.md,
+              ),
               child: Row(
                 children: [
                   IconButton(
-                    // Mirrors with the locale: RTL wants the arrow the
-                    // other way round.
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    tooltip:
+                        MaterialLocalizations.of(context).backButtonTooltip,
+                    // `Icons.arrow_back` does not mirror itself; in an
+                    // RTL locale "back" points the other way.
+                    icon: Icon(
+                      Directionality.of(context) == TextDirection.rtl
+                          ? Icons.arrow_forward
+                          : Icons.arrow_back,
+                    ),
                     onPressed: onBack,
                   ),
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
@@ -767,7 +781,7 @@ class _SubSheet extends StatelessWidget {
               ),
             ),
             ...children,
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
           ],
         ),
       ),
@@ -792,27 +806,44 @@ class _MenuRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = enabled ? Colors.white : Colors.white38;
-    return ListTile(
-      leading: Icon(icon, color: color),
-      title: Text(title, style: TextStyle(color: color)),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (value.isNotEmpty)
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 150),
-              child: Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white54),
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
+    final color = enabled ? onSurface : onSurface.withValues(alpha: 0.38);
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+
+    // "Quality, 1080p" rather than three separate announcements.
+    return Semantics(
+      label: value.isEmpty ? title : '$title: $value',
+      button: true,
+      enabled: enabled,
+      excludeSemantics: true,
+      child: ListTile(
+        minTileHeight: AppSpacing.minTapTarget,
+        leading: Icon(icon, color: color),
+        title: Text(title, style: TextStyle(color: color)),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (value.isNotEmpty)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 150),
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: theme.yt.secondaryText),
+                ),
               ),
+            // The chevron points at the submenu, so it follows the
+            // reading direction.
+            Icon(
+              rtl ? Icons.chevron_left : Icons.chevron_right,
+              color: onSurface.withValues(alpha: 0.38),
             ),
-          const Icon(Icons.chevron_right, color: Colors.white38),
-        ],
+          ],
+        ),
+        onTap: enabled ? onTap : null,
       ),
-      onTap: enabled ? onTap : null,
     );
   }
 }
@@ -833,11 +864,13 @@ class _CheckRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(
-        selected ? Icons.check : null,
-        color: Colors.white,
-      ),
-      title: Text(label, style: const TextStyle(color: Colors.white)),
+      minTileHeight: AppSpacing.minTapTarget,
+      // ListTile turns this into a `selected` semantics flag, which is
+      // what a screen reader needs — the tick alone said nothing.
+      selected: selected,
+      selectedColor: Theme.of(context).colorScheme.onSurface,
+      leading: Icon(selected ? Icons.check : null),
+      title: Text(label),
       trailing: trailing,
       onTap: onTap,
     );
