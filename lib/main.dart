@@ -18,10 +18,14 @@ import 'presentation/providers/settings_providers.dart';
 import 'presentation/routing/app_router.dart';
 import 'presentation/theme/app_theme.dart';
 import 'services/audio_player_handler.dart';
+import 'services/cast_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+  await CastService.initialize().catchError((Object error) {
+    debugPrint('Google Cast unavailable: $error');
+  });
 
   // Initialize SharedPreferences synchronously
   final prefs = await SharedPreferences.getInstance();

@@ -70,7 +70,7 @@ enum FailureType {
 }
 
 /// Failure (يستخدم في Result pattern)
-class Failure {
+class Failure implements Exception {
   final String message;
   final FailureType type;
   final Object? cause;

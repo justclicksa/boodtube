@@ -1027,4 +1027,99 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get continueWatching => 'Continue watching';
+
+  @override
+  String get streamClient => 'Playback client';
+
+  @override
+  String get failedClients => 'Rejected clients';
+
+  @override
+  String get networkSpeed => 'Network speed';
+
+  @override
+  String get automaticRecoveries => 'Automatic recoveries';
+
+  @override
+  String get fallbackReason => 'Fallback reason';
+
+  @override
+  String get noFallback => 'None';
+
+  @override
+  String get playerShortcuts => 'Player shortcuts';
+
+  @override
+  String get playerShortcutsSubtitle =>
+      'Choose and order the buttons shown over the video';
+
+  @override
+  String get homeEmptyTitle => 'No recommendations yet';
+
+  @override
+  String get homeEmptySubtitle =>
+      'Refresh the feed or choose a topic to start exploring';
+
+  @override
+  String get refreshFeed => 'Refresh feed';
+
+  @override
+  String get backupAndRestore => 'Backup and restore';
+
+  @override
+  String get exportBackup => 'Export backup';
+
+  @override
+  String get exportBackupSubtitle =>
+      'Save settings, blocked channels, subscriptions, favorites and history';
+
+  @override
+  String get restoreBackup => 'Restore backup';
+
+  @override
+  String get restoreBackupSubtitle =>
+      'Replace local settings and library from a BoodTube backup';
+
+  @override
+  String get restoreBackupConfirm =>
+      'This replaces the local history, subscriptions, favorites and Watch later list. Downloads are not changed.';
+
+  @override
+  String get backupRestored => 'Backup restored successfully';
+
+  @override
+  String get backupFailed => 'The backup could not be processed';
+
+  @override
+  String get liveChat => 'Live chat';
+
+  @override
+  String get liveChatWaiting => 'Waiting for new messages…';
+
+  @override
+  String get liveChatReadOnly => 'Read-only live conversation';
+
+  @override
+  String get castToTv => 'Cast to TV';
+
+  @override
+  String get castScanning => 'Looking for devices on your Wi-Fi…';
+
+  @override
+  String get castNoDevices => 'No Cast devices found';
+
+  @override
+  String get castFailed => 'Could not start casting';
+
+  @override
+  String get subtitleAppearance => 'Subtitle appearance';
+
+  @override
+  String get subtitleSize => 'Text size';
+
+  @override
+  String get subtitlePosition => 'Vertical position';
+
+  @override
+  String get subtitleBackground => 'Background';
 }

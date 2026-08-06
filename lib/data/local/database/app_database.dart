@@ -242,4 +242,76 @@ class AppDatabase extends _$AppDatabase {
       ),
     );
   }
+
+  /// Portable user data only. Download rows are intentionally excluded:
+  /// their file paths point at this installation's private sandbox and
+  /// cannot be restored on another device.
+  Future<Map<String, Object?>> exportPortableData() async => {
+        'history': [
+          for (final row in await select(watchHistoryTable).get()) row.toJson(),
+        ],
+        'subscriptions': [
+          for (final row in await select(localSubscriptionsTable).get())
+            row.toJson(),
+        ],
+        'favorites': [
+          for (final row in await select(favoritesTable).get()) row.toJson(),
+        ],
+        'watchLater': [
+          for (final row in await select(watchLaterTable).get()) row.toJson(),
+        ],
+        'playPositions': [
+          for (final row in await select(playPositionsTable).get())
+            row.toJson(),
+        ],
+      };
+
+  Future<void> restorePortableData(Map<String, Object?> data) {
+    Iterable<Map<String, dynamic>> rows(String key) =>
+        (data[key] as List<dynamic>? ?? const [])
+            .whereType<Map<Object?, Object?>>()
+            .map(Map<String, dynamic>.from);
+
+    return transaction(() async {
+      await batch((batch) {
+        batch
+          ..deleteAll(watchHistoryTable)
+          ..deleteAll(localSubscriptionsTable)
+          ..deleteAll(favoritesTable)
+          ..deleteAll(watchLaterTable)
+          ..deleteAll(playPositionsTable);
+
+        for (final json in rows('history')) {
+          batch.insert(
+            watchHistoryTable,
+            WatchHistoryTableData.fromJson(json).toCompanion(true),
+          );
+        }
+        for (final json in rows('subscriptions')) {
+          batch.insert(
+            localSubscriptionsTable,
+            LocalSubscriptionsTableData.fromJson(json).toCompanion(true),
+          );
+        }
+        for (final json in rows('favorites')) {
+          batch.insert(
+            favoritesTable,
+            FavoritesTableData.fromJson(json).toCompanion(true),
+          );
+        }
+        for (final json in rows('watchLater')) {
+          batch.insert(
+            watchLaterTable,
+            WatchLaterTableData.fromJson(json).toCompanion(true),
+          );
+        }
+        for (final json in rows('playPositions')) {
+          batch.insert(
+            playPositionsTable,
+            PlayPositionsTableData.fromJson(json).toCompanion(true),
+          );
+        }
+      });
+    });
+  }
 }

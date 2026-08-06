@@ -26,6 +26,7 @@ import 'package:smarttube_poc/domain/repositories/media_item_repository.dart';
 import 'package:smarttube_poc/domain/repositories/local_library_repository.dart';
 import 'package:smarttube_poc/presentation/providers/auth_providers.dart';
 import 'package:smarttube_poc/services/history_sync.dart';
+import 'package:smarttube_poc/services/cast_service.dart';
 
 // ============================================================
 // Infrastructure providers
@@ -63,6 +64,10 @@ final innerTubeClientProvider = Provider<InnerTubeClient>((ref) {
 
 final streamResolverProvider = Provider<StreamResolver>((ref) {
   return StreamResolver(ref.watch(youtubeExplodeProvider));
+});
+
+final castServiceProvider = Provider<CastService>((ref) {
+  return CastService(ref.watch(streamResolverProvider));
 });
 
 final commentsServiceProvider = Provider<CommentsService>((ref) {

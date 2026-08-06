@@ -15,6 +15,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../domain/entities/media_item.dart';
+import '../../domain/entities/live_chat_message.dart';
 
 /// One entry of the account's subscription list.
 typedef SubscribedChannel = ({
@@ -40,6 +41,12 @@ typedef GuideEntry = ({String title, String browseId, String? iconType});
 
 /// One page of a feed plus the continuation that fetches the next one.
 typedef FeedPage = ({List<MediaItem> items, String? continuation});
+
+typedef LiveChatPage = ({
+  List<LiveChatMessage> messages,
+  String? continuation,
+  Duration pollAfter,
+});
 
 class AuthenticatedInnerTubeClient {
   AuthenticatedInnerTubeClient(this._dio, this._accessToken, {String? locale})
@@ -110,6 +117,78 @@ class AuthenticatedInnerTubeClient {
   /// Callers that mirror an action to YouTube use this to tell "the
   /// request failed" apart from "there is no account to mirror to".
   Future<bool> isSignedIn() async => await _accessToken() != null;
+
+  Future<String?> getLiveChatContinuation(String videoId) async {
+    final data = await _post('next', {'videoId': videoId});
+    if (data == null) return null;
+    String? continuation;
+    _walk(data, (node) {
+      if (continuation != null || !node.containsKey('liveChatRenderer')) return;
+      final renderer = node['liveChatRenderer'];
+      if (renderer is! Map<String, dynamic>) return;
+      _walk(renderer['continuations'], (candidate) {
+        continuation ??= _continuationValue(candidate);
+      });
+    });
+    return continuation;
+  }
+
+  Future<LiveChatPage?> getLiveChatPage(String continuation) async {
+    final data = await _post(
+      'live_chat/get_live_chat',
+      {'continuation': continuation},
+    );
+    if (data == null) return null;
+    final messages = <LiveChatMessage>[];
+    String? next;
+    var pollAfter = const Duration(seconds: 2);
+    _walk(data, (node) {
+      final renderer = node['liveChatTextMessageRenderer'];
+      if (renderer is Map<String, dynamic>) {
+        final message = _text(renderer['message']);
+        final author = _text(renderer['authorName']);
+        if (message != null && message.isNotEmpty && author != null) {
+          messages.add(
+            LiveChatMessage(
+              id: renderer['id'] as String? ??
+                  '${author.hashCode}-${message.hashCode}',
+              author: author,
+              message: message,
+              authorAvatarUrl: _deepImageUrl(
+                (renderer['authorPhoto'] as Map<String, dynamic>?) ?? const {},
+              ),
+            ),
+          );
+        }
+      }
+      final value = _continuationValue(node);
+      if (value != null) {
+        next = value;
+        final timeout = node['timeoutMs'];
+        if (timeout is num) {
+          pollAfter = Duration(milliseconds: timeout.toInt().clamp(500, 10000));
+        }
+      }
+    });
+    return (messages: messages, continuation: next, pollAfter: pollAfter);
+  }
+
+  static String? _continuationValue(Map<String, dynamic> node) {
+    for (final key in const [
+      'reloadContinuationData',
+      'timedContinuationData',
+      'invalidationContinuationData',
+    ]) {
+      final value = node[key];
+      if (value is Map) {
+        final continuation = value['continuation'];
+        if (continuation is String && continuation.isNotEmpty) {
+          return continuation;
+        }
+      }
+    }
+    return null;
+  }
 
   /// The signed-in user's subscription feed. Null when signed out or the
   /// request failed, so callers can fall back to the local list.

@@ -26,10 +26,12 @@ import '../../providers/local_library_providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/error_view.dart';
+import '../../widgets/empty_view.dart';
 import '../../widgets/feed_tail.dart';
 import '../../widgets/video_card.dart';
 import '../browse/browse_screen.dart';
 import '../shorts/shorts_screen.dart' show shortsProvider;
+import '../player/widgets/cast_device_sheet.dart';
 
 /// Which topic chip is selected. Null means the mixed home feed.
 ///
@@ -141,6 +143,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       actions: [
         IconButton(
+          icon: const Icon(Icons.cast_outlined),
+          tooltip: l10n.castToTv,
+          onPressed: () => showCastDeviceSheet(context, null),
+        ),
+        IconButton(
           icon: const Icon(Icons.download_outlined),
           tooltip: l10n.downloads,
           onPressed: () => context.push('/downloads'),
@@ -151,7 +158,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           onPressed: () => context.push('/search'),
         ),
         IconButton(
-          icon: const Icon(Icons.settings_outlined),
+          icon: CircleAvatar(
+            radius: 14,
+            backgroundColor: Theme.of(context).colorScheme.onSurface,
+            child: Icon(
+              Icons.person,
+              size: 18,
+              color: Theme.of(context).scaffoldBackgroundColor,
+            ),
+          ),
           tooltip: l10n.settingsTab,
           onPressed: () => context.push('/settings'),
         ),
@@ -187,7 +202,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<Widget> _mixedSlivers(AppLocalizations l10n) {
     return ref.watch(homeFeedPagedProvider).when(
           data: (feed) {
-            if (feed.items.isEmpty) return [_emptySliver(l10n)];
+            if (feed.items.isEmpty) {
+              return [
+                _emptySliver(
+                  l10n,
+                  () => ref.invalidate(homeFeedPagedProvider),
+                ),
+              ];
+            }
 
             final resumable = ref.watch(continueWatchingProvider);
             // Shorts do not belong among 16:9 cards; they are pulled out
@@ -231,7 +253,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<Widget> _topicSlivers(AppLocalizations l10n, BrowseCategory topic) {
     return ref.watch(browseCategoryProvider(topic)).when(
           data: (items) => items.isEmpty
-              ? [_emptySliver(l10n)]
+              ? [
+                  _emptySliver(
+                    l10n,
+                    () => ref.invalidate(browseCategoryProvider(topic)),
+                  ),
+                ]
               : [
                   _cardSliver(items),
                   const SliverToBoxAdapter(child: SizedBox(height: 24)),
@@ -264,10 +291,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _emptySliver(AppLocalizations l10n) {
+  Widget _emptySliver(AppLocalizations l10n, VoidCallback onRefresh) {
     return SliverFillRemaining(
       hasScrollBody: false,
-      child: Center(child: Text(l10n.nothingToShow)),
+      child: EmptyView(
+        icon: Icons.video_library_outlined,
+        title: l10n.homeEmptyTitle,
+        subtitle: l10n.homeEmptySubtitle,
+        action: FilledButton.icon(
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.refreshFeed),
+        ),
+      ),
     );
   }
 

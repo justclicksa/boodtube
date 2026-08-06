@@ -11,6 +11,8 @@ import '../../data/local/preferences/settings_repository_impl.dart';
 import '../../domain/entities/media_format.dart';
 import '../../domain/entities/content_filter.dart';
 import '../../domain/entities/sponsor_segment.dart';
+import '../../services/backup_service.dart';
+import 'repository_providers.dart';
 
 // ============================================================
 // SharedPreferences provider
@@ -28,6 +30,13 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
   return SettingsRepository(ref.watch(sharedPreferencesProvider));
 });
 
+final backupServiceProvider = Provider<BackupService>((ref) {
+  return BackupService(
+    ref.watch(appDatabaseProvider),
+    ref.watch(sharedPreferencesProvider),
+  );
+});
+
 // ============================================================
 // SettingsController (StateNotifier)
 // ============================================================
@@ -36,6 +45,8 @@ class SettingsController extends StateNotifier<AppSettings> {
   final SettingsRepository _repo;
 
   SettingsController(this._repo) : super(_repo.load());
+
+  void reload() => state = _repo.load();
 
   Future<void> setThemeMode(AppThemeMode mode) async {
     state = state.copyWith(themeMode: mode);
@@ -104,6 +115,15 @@ class SettingsController extends StateNotifier<AppSettings> {
   Future<void> setShowRemainingTime(bool enabled) async {
     state = state.copyWith(showRemainingTime: enabled);
     await _repo.setShowRemainingTime(enabled);
+  }
+
+  Future<void> setPlayerQuickActions(List<PlayerQuickAction> actions) async {
+    final normalized = <PlayerQuickAction>[
+      ...actions.where((action) => action != PlayerQuickAction.settings),
+      PlayerQuickAction.settings,
+    ];
+    state = state.copyWith(playerQuickActions: normalized);
+    await _repo.setPlayerQuickActions(normalized);
   }
 
   Future<void> setPictureInPictureEnabled(bool enabled) async {

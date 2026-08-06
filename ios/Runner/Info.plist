@@ -67,6 +67,13 @@
 	<string>Save downloaded videos to your photo library.</string>
 	<key>NSAppleMusicUsageDescription</key>
 	<string>Access your music library for background audio controls.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>BoodTube uses the local network to discover Cast-enabled TVs.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_CC1AD845._googlecast._tcp</string>
+		<string>_googlecast._tcp</string>
+	</array>
 
 	<!-- ATS (App Transport Security) -->
 	<key>NSAppTransportSecurity</key>

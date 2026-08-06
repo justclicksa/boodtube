@@ -72,6 +72,15 @@ class StreamProxy {
   final Map<String, _RangeForm> _rangeForm = {};
   int _nextId = 0;
 
+  int _transferWindowBytes = 0;
+  DateTime _transferWindowStarted = DateTime.now();
+  double _transferMbps = 0;
+
+  /// Recent relay throughput. It is deliberately a short rolling window:
+  /// diagnostics should describe the network now, not average the whole
+  /// video including pauses and seeks.
+  double get transferMbps => _transferMbps;
+
   /// Fired when googlevideo stops serving a stream part-way through.
   ///
   /// Some videos are capped: every client's URL is served for the first
@@ -219,12 +228,23 @@ class StreamProxy {
         _rangeForm[host] = _RangeForm.query;
         return bytes;
       }
-      if (known == _RangeForm.query) return null;
     }
 
     final bytes = await _readVia(target, start, end, query: false);
-    if (bytes != null) _rangeForm[host] = _RangeForm.header;
-    return bytes;
+    if (bytes != null) {
+      _rangeForm[host] = _RangeForm.header;
+      return bytes;
+    }
+
+    // A range form remembered for this CDN host is only a preference.
+    // googlevideo can accept a different dialect for the next signed URL,
+    // so try the alternative before declaring a playable stream dead.
+    if (known == _RangeForm.header) {
+      final queryBytes = await _readVia(target, start, end, query: true);
+      if (queryBytes != null) _rangeForm[host] = _RangeForm.query;
+      return queryBytes;
+    }
+    return null;
   }
 
   Future<Uint8List?> _readVia(
@@ -255,10 +275,25 @@ class StreamProxy {
         builder.add(chunk);
       }
       final bytes = builder.takeBytes();
+      _recordTransfer(bytes.length);
       return bytes.isEmpty ? null : bytes;
     } catch (_) {
       return null;
     }
+  }
+
+  void _recordTransfer(int bytes) {
+    if (bytes <= 0) return;
+    _transferWindowBytes += bytes;
+    final now = DateTime.now();
+    final elapsed = now.difference(_transferWindowStarted);
+    if (elapsed < const Duration(seconds: 1)) return;
+    _transferMbps = (_transferWindowBytes * 8) /
+        elapsed.inMicroseconds.clamp(1, double.infinity) *
+        1000000 /
+        1000000;
+    _transferWindowBytes = 0;
+    _transferWindowStarted = now;
   }
 
   /// Total byte size + content type, learned once from a 2-byte Range
@@ -306,9 +341,31 @@ class StreamProxy {
   /// status. Used to skip stream URLs that googlevideo refuses (403)
   /// before handing them to mpv.
   Future<int> probe(Uri url) async {
+    // Match the relay: query ranges work on URLs that reject the Range
+    // header. Testing only the header caused intermittent false 403s.
+    final queryStatus = await _probeVia(url, query: true);
+    if (queryStatus >= 200 && queryStatus < 300) {
+      _rangeForm[url.host] = _RangeForm.query;
+      return queryStatus;
+    }
+
+    final headerStatus = await _probeVia(url, query: false);
+    if (headerStatus >= 200 && headerStatus < 300) {
+      _rangeForm[url.host] = _RangeForm.header;
+    }
+    return headerStatus;
+  }
+
+  Future<int> _probeVia(Uri url, {required bool query}) async {
     try {
-      final req = await _client.getUrl(url);
-      req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-1');
+      final target = query
+          ? url.replace(queryParameters: {
+              ...url.queryParameters,
+              'range': '0-1',
+            })
+          : url;
+      final req = await _client.getUrl(target);
+      if (!query) req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-1');
       final res = await req.close().timeout(const Duration(seconds: 10));
       final contentRange = res.headers.value(HttpHeaders.contentRangeHeader);
       await res.drain<void>();

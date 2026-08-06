@@ -15,6 +15,7 @@ import 'package:smarttube_poc/domain/entities/channel_info.dart';
 import 'package:smarttube_poc/domain/entities/content_filter.dart';
 import 'package:smarttube_poc/domain/entities/media_group.dart';
 import 'package:smarttube_poc/domain/entities/media_item.dart';
+import 'package:smarttube_poc/domain/entities/live_chat_message.dart';
 import 'package:smarttube_poc/domain/entities/playlist_info.dart';
 import 'package:smarttube_poc/presentation/providers/settings_providers.dart';
 import 'package:smarttube_poc/domain/repositories/content_repository.dart'
@@ -354,6 +355,31 @@ final homeFeedPagedProvider =
     AsyncNotifierProvider.autoDispose<HomeFeedNotifier, PagedFeed>(
   HomeFeedNotifier.new,
 );
+
+/// Read-only live chat, polled using YouTube's continuation delay.
+final liveChatProvider = StreamProvider.autoDispose
+    .family<List<LiveChatMessage>, String>((ref, videoId) async* {
+  final client = ref.watch(authenticatedClientProvider);
+  var continuation = await client.getLiveChatContinuation(videoId);
+  if (continuation == null) throw StateError('live-chat-unavailable');
+
+  final messages = <LiveChatMessage>[];
+  final seen = <String>{};
+  yield const [];
+  while (continuation != null) {
+    final page = await client.getLiveChatPage(continuation);
+    if (page == null) throw StateError('live-chat-failed');
+    for (final message in page.messages) {
+      if (seen.add(message.id)) messages.add(message);
+    }
+    if (messages.length > 250) {
+      messages.removeRange(0, messages.length - 250);
+    }
+    yield List.unmodifiable(messages);
+    continuation = page.continuation;
+    if (continuation != null) await Future<void>.delayed(page.pollAfter);
+  }
+});
 
 /// The first page of home, as shelves. Kept for callers that want the
 /// grouped shape; [homeFeedPagedProvider] is what scrolls.

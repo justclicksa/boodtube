@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 
 import '../../data/youtube/stream_resolver.dart';
+import '../../data/local/preferences/settings_repository_impl.dart';
 import '../../core/errors/exceptions.dart';
 import '../../domain/entities/media_item.dart';
 import '../../domain/entities/media_subtitle.dart';
@@ -36,6 +37,68 @@ enum RepeatMode { none, one, pause }
 
 /// How the video fills the player surface — SmartTube's "Video zoom".
 enum VideoFit { fit, fitWidth, fitHeight, stretch, zoom }
+
+/// Retries short-lived network and signed-URL failures while opening a
+/// video. Each attempt resolves fresh URLs instead of replaying a stale one.
+Future<T> retryPlaybackOperation<T>(
+  Future<T> Function() operation, {
+  int maxAttempts = 2,
+  Duration delay = const Duration(milliseconds: 500),
+  bool Function(Object error)? shouldRetry,
+}) async {
+  Object? lastError;
+  StackTrace? lastStack;
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await operation();
+    } catch (error, stack) {
+      lastError = error;
+      lastStack = stack;
+      if (attempt == maxAttempts || !(shouldRetry?.call(error) ?? true)) {
+        Error.throwWithStackTrace(error, stack);
+      }
+      await Future<void>.delayed(delay * attempt);
+    }
+  }
+  Error.throwWithStackTrace(lastError!, lastStack!);
+}
+
+bool isRetryablePlaybackError(Object error) {
+  if (error is AppException) {
+    return switch (error) {
+      NetworkException() || RateLimitException() || UnknownException() => true,
+      NotFoundException() ||
+      AuthException() ||
+      ParseException() ||
+      DatabaseException() ||
+      YouTubeException() =>
+        false,
+    };
+  }
+  if (error is Failure) {
+    return switch (error.type) {
+      FailureType.network ||
+      FailureType.rateLimited ||
+      FailureType.unknown =>
+        true,
+      FailureType.notFound ||
+      FailureType.unauthorized ||
+      FailureType.parse ||
+      FailureType.database =>
+        false,
+    };
+  }
+  if (error is TimeoutException) return true;
+  final message = error.toString().toLowerCase();
+  const permanent = [
+    'unavailable',
+    'private video',
+    'members-only',
+    'age-restricted',
+    'copyright',
+  ];
+  return !permanent.any(message.contains);
+}
 
 class PlayerStateData {
   const PlayerStateData({
@@ -65,6 +128,16 @@ class PlayerStateData {
     this.volume = 100,
     this.queue = const [],
     this.pendingHeight,
+    this.sourceClient,
+    this.failedClients = const [],
+    this.fallbackReason,
+    this.recoveryCount = 0,
+    this.networkMbps = 0,
+    this.audioTracks = const [],
+    this.selectedAudioTrackId,
+    this.subtitleScale = 1,
+    this.subtitleOffset = 24,
+    this.subtitleBackgroundOpacity = 0.67,
   });
 
   final MediaItem? currentItem;
@@ -101,6 +174,16 @@ class PlayerStateData {
   /// moment the user taps, so the menu and the loading label reflect the
   /// choice instead of appearing to have ignored it.
   final int? pendingHeight;
+  final String? sourceClient;
+  final List<String> failedClients;
+  final String? fallbackReason;
+  final int recoveryCount;
+  final double networkMbps;
+  final List<ResolvedAudioTrack> audioTracks;
+  final String? selectedAudioTrackId;
+  final double subtitleScale;
+  final double subtitleOffset;
+  final double subtitleBackgroundOpacity;
 
   PlayerStateData copyWith({
     MediaItem? currentItem,
@@ -129,11 +212,24 @@ class PlayerStateData {
     double? volume,
     List<MediaItem>? queue,
     int? pendingHeight,
+    String? sourceClient,
+    List<String>? failedClients,
+    String? fallbackReason,
+    int? recoveryCount,
+    double? networkMbps,
+    List<ResolvedAudioTrack>? audioTracks,
+    String? selectedAudioTrackId,
+    double? subtitleScale,
+    double? subtitleOffset,
+    double? subtitleBackgroundOpacity,
     bool clearError = false,
     bool clearItem = false,
     bool clearSleepTimer = false,
     bool clearSubtitle = false,
     bool clearPendingHeight = false,
+    bool clearFallbackReason = false,
+    bool clearDiagnostics = false,
+    bool clearAudioTrack = false,
   }) {
     return PlayerStateData(
       currentItem: clearItem ? null : (currentItem ?? this.currentItem),
@@ -166,6 +262,24 @@ class PlayerStateData {
       queue: queue ?? this.queue,
       pendingHeight:
           clearPendingHeight ? null : (pendingHeight ?? this.pendingHeight),
+      sourceClient:
+          clearDiagnostics ? null : (sourceClient ?? this.sourceClient),
+      failedClients:
+          clearDiagnostics ? const [] : (failedClients ?? this.failedClients),
+      fallbackReason: clearFallbackReason
+          ? null
+          : (clearDiagnostics ? null : (fallbackReason ?? this.fallbackReason)),
+      recoveryCount:
+          clearDiagnostics ? 0 : (recoveryCount ?? this.recoveryCount),
+      networkMbps: clearDiagnostics ? 0 : (networkMbps ?? this.networkMbps),
+      audioTracks: audioTracks ?? this.audioTracks,
+      selectedAudioTrackId: clearAudioTrack
+          ? null
+          : (selectedAudioTrackId ?? this.selectedAudioTrackId),
+      subtitleScale: subtitleScale ?? this.subtitleScale,
+      subtitleOffset: subtitleOffset ?? this.subtitleOffset,
+      subtitleBackgroundOpacity:
+          subtitleBackgroundOpacity ?? this.subtitleBackgroundOpacity,
     );
   }
 }
@@ -196,7 +310,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
         // error screen made live broadcasts look broken while they were
         // in fact about to play.
         if (_isBenignPlaybackError(message)) return;
-        state = state.copyWith(error: message, isLoading: false);
+        unawaited(_recoverPlayback('player-error: $message'));
       }))
       ..add(_player.stream.position.listen((pos) {
         state = state.copyWith(position: pos);
@@ -206,10 +320,22 @@ class PlayerController extends StateNotifier<PlayerStateData>
         state = state.copyWith(duration: dur);
       }))
       ..add(_player.stream.buffer.listen((buf) {
-        state = state.copyWith(buffered: buf);
+        state = state.copyWith(
+          buffered: buf,
+          networkMbps: _ref.read(streamProxyProvider).transferMbps,
+        );
       }))
       ..add(_player.stream.buffering.listen((buffering) {
         state = state.copyWith(isBuffering: buffering);
+        _bufferRecoveryTimer?.cancel();
+        if (buffering && state.currentItem?.isLive != true) {
+          final position = state.position;
+          _bufferRecoveryTimer = Timer(const Duration(seconds: 18), () {
+            if (state.isBuffering && state.position <= position) {
+              unawaited(_recoverPlayback('buffer-stalled'));
+            }
+          });
+        }
       }))
       ..add(_player.stream.playing.listen((playing) {
         // Frames are arriving, so whatever was reported earlier did not
@@ -234,6 +360,8 @@ class PlayerController extends StateNotifier<PlayerStateData>
 
   Timer? _savePositionTimer;
   Timer? _sleepTimer;
+  Timer? _bufferRecoveryTimer;
+  bool _recoveringPlayback = false;
 
   /// Guards against a second quality switch starting while the first is
   /// still resolving — two concurrent `Player.open` calls race.
@@ -339,6 +467,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
     state = state.copyWith(
       isLoading: true,
       clearError: true,
+      clearDiagnostics: true,
       currentItem: seed ?? state.currentItem,
     );
     _cpn = HistorySync.newCpn();
@@ -349,19 +478,44 @@ class PlayerController extends StateNotifier<PlayerStateData>
       final sw = Stopwatch()..start();
       debugPrint('loadVideo[$videoId]: fetching metadata...');
       final repo = _ref.read(mediaItemRepositoryProvider);
-      final result =
-          await repo.getMediaItem(videoId).timeout(const Duration(seconds: 25));
+      final item = await retryPlaybackOperation(
+        () async {
+          final result = await repo
+              .getMediaItem(videoId)
+              .timeout(const Duration(seconds: 25));
+          return result.when(
+            success: (item) => item,
+            failure: (message, type, cause) =>
+                throw Failure(message, type: type, cause: cause),
+          );
+        },
+        shouldRetry: isRetryablePlaybackError,
+      );
 
       // Carry the cause, not a sentence about it. Stringifying here left
       // the watch page with nothing to classify, so every failure —
       // offline, rate limited, video pulled — surfaced as the same
       // "something went wrong".
-      final item = result.when(
-        success: (item) => item,
-        failure: (message, type, cause) =>
-            throw Failure(message, type: type, cause: cause),
-      );
       debugPrint('loadVideo: metadata done in ${sw.elapsedMilliseconds}ms');
+
+      final channelPreferences = _ref
+          .read(settingsRepositoryProvider)
+          .channelPlaybackPreferences(item.channelId);
+      final rememberedFit = VideoFit.values.firstWhere(
+        (fit) => fit.name == channelPreferences?.videoFit,
+        orElse: () => state.videoFit,
+      );
+      final rememberedSpeed = channelPreferences?.speed ??
+          _ref.read(settingsControllerProvider).defaultSpeed;
+      state = state.copyWith(
+        currentItem: item,
+        playbackSpeed: rememberedSpeed,
+        videoFit: rememberedFit,
+        subtitleScale: channelPreferences?.subtitleScale ?? 1,
+        subtitleOffset: channelPreferences?.subtitleOffset ?? 24,
+        subtitleBackgroundOpacity:
+            channelPreferences?.subtitleBackgroundOpacity ?? 0.67,
+      );
 
       // A live broadcast is a rolling HLS playlist, not a file that can
       // be walked by byte range, so it takes a different path entirely.
@@ -373,6 +527,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
         state = state.copyWith(
           currentItem: item,
           isLoading: false,
+          clearError: true,
           currentQualityLabel: 'LIVE',
           availableHeights: const [],
           sponsorSegments: const [],
@@ -381,17 +536,39 @@ class PlayerController extends StateNotifier<PlayerStateData>
         return;
       }
 
-      final resolved = await _openStreams(videoId);
+      final resolved = await retryPlaybackOperation(
+        () => _openStreams(
+          videoId,
+          exactHeight: channelPreferences?.qualityHeight,
+          audioTrackId: channelPreferences?.audioTrackId,
+        ),
+        shouldRetry: isRetryablePlaybackError,
+      );
 
       state = state.copyWith(
         currentItem: item,
         isLoading: false,
+        clearError: true,
         currentVideoUrl: resolved.videoUrl,
         currentAudioUrl: resolved.audioUrl,
         currentQualityLabel: resolved.qualityLabel,
         availableHeights: resolved.availableHeights,
         sponsorSegments: item.sponsorSegments,
+        sourceClient: resolved.sourceClient,
+        failedClients: resolved.failedClients,
+        fallbackReason:
+            resolved.failedClients.isEmpty ? null : 'client-fallback',
+        audioTracks: resolved.audioTracks,
+        selectedAudioTrackId: resolved.selectedAudioTrackId,
       );
+
+      final subtitleCode = channelPreferences?.subtitleCode;
+      if (subtitleCode != null) {
+        final subtitle = item.subtitles
+            .where((candidate) => candidate.code == subtitleCode)
+            .firstOrNull;
+        if (subtitle != null) await selectSubtitle(subtitle);
+      }
 
       // Publish metadata so the notification / lock screen shows the
       // video and playback survives going to the background.
@@ -439,6 +616,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
   Future<ResolvedStream> _openStreams(
     String videoId, {
     int? exactHeight,
+    String? audioTrackId,
   }) async {
     final sw = Stopwatch()..start();
     // Probe candidates so we never hand mpv a URL googlevideo will 403.
@@ -470,6 +648,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
           quality: settings.defaultQuality,
           probe: proxy.probe,
           exactHeight: exactHeight,
+          audioTrackId: audioTrackId,
         )
         .timeout(const Duration(seconds: 60));
     debugPrint('openStreams: resolved in ${sw.elapsedMilliseconds}ms '
@@ -502,6 +681,72 @@ class PlayerController extends StateNotifier<PlayerStateData>
     return resolved;
   }
 
+  /// Refreshes expired URLs and progressively lowers quality without
+  /// losing the playhead. SmartTube treats a transport failure as a
+  /// recovery event; the user sees an error only after every viable rung
+  /// has been attempted.
+  Future<void> _recoverPlayback(String reason) async {
+    final item = state.currentItem;
+    if (_recoveringPlayback || item == null || item.isLive) {
+      if (item?.isLive == true) {
+        state = state.copyWith(error: reason, isLoading: false);
+      }
+      return;
+    }
+    _recoveringPlayback = true;
+    _bufferRecoveryTimer?.cancel();
+    final resumeFrom = state.position;
+    final wasPlaying = state.isPlaying;
+    final currentHeight = _currentHeight();
+    final candidates = <int?>[
+      currentHeight,
+      ...state.availableHeights.where(
+        (height) => currentHeight == null || height < currentHeight,
+      ),
+    ];
+    Object? lastError;
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      fallbackReason: reason,
+      recoveryCount: state.recoveryCount + 1,
+    );
+    try {
+      for (final height in candidates) {
+        try {
+          final resolved = await _openStreams(
+            item.videoId,
+            exactHeight: height,
+            audioTrackId: state.selectedAudioTrackId,
+          );
+          if (resumeFrom > Duration.zero) await _player.seek(resumeFrom);
+          if (wasPlaying) await _player.play();
+          state = state.copyWith(
+            isLoading: false,
+            clearError: true,
+            currentVideoUrl: resolved.videoUrl,
+            currentAudioUrl: resolved.audioUrl,
+            currentQualityLabel: resolved.qualityLabel,
+            availableHeights: resolved.availableHeights,
+            sourceClient: resolved.sourceClient,
+            failedClients: resolved.failedClients,
+            audioTracks: resolved.audioTracks,
+            selectedAudioTrackId: resolved.selectedAudioTrackId,
+          );
+          return;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      state = state.copyWith(
+        isLoading: false,
+        error: lastError ?? reason,
+      );
+    } finally {
+      _recoveringPlayback = false;
+    }
+  }
+
   /// Re-opens the current video at a different resolution, keeping the
   /// playback position, speed and play/pause state. Metadata is reused —
   /// only the stream URLs change — so this is a couple of seconds rather
@@ -513,7 +758,9 @@ class PlayerController extends StateNotifier<PlayerStateData>
   /// Re-opens one quality rung down after googlevideo cut a stream off.
   /// Returns false when there is nothing lower left to fall back to.
   bool _stepDownAfterCap() {
-    if (_switchingQuality) return true; // a downgrade is already running
+    if (_switchingQuality || _recoveringPlayback) {
+      return true; // a downgrade/recovery is already running
+    }
     final heights = state.availableHeights;
     if (heights.isEmpty) return false;
 
@@ -555,7 +802,11 @@ class PlayerController extends StateNotifier<PlayerStateData>
     );
 
     try {
-      final resolved = await _openStreams(item.videoId, exactHeight: height);
+      final resolved = await _openStreams(
+        item.videoId,
+        exactHeight: height,
+        audioTrackId: state.selectedAudioTrackId,
+      );
       if (resumeFrom > Duration.zero) await _player.seek(resumeFrom);
       if (wasPlaying) {
         await _player.play();
@@ -568,8 +819,16 @@ class PlayerController extends StateNotifier<PlayerStateData>
         currentAudioUrl: resolved.audioUrl,
         currentQualityLabel: resolved.qualityLabel,
         availableHeights: resolved.availableHeights,
+        sourceClient: resolved.sourceClient,
+        failedClients: resolved.failedClients,
+        audioTracks: resolved.audioTracks,
+        selectedAudioTrackId: resolved.selectedAudioTrackId,
+        fallbackReason: resolved.failedClients.isEmpty
+            ? state.fallbackReason
+            : 'client-fallback',
         clearPendingHeight: true,
       );
+      unawaited(_rememberChannel(qualityHeight: resolved.videoHeight));
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -635,6 +894,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
 
   void setVideoFit(VideoFit fit) {
     state = state.copyWith(videoFit: fit);
+    unawaited(_rememberChannel(videoFit: fit.name));
   }
 
   /// Volume as a percentage. SmartTube allows boosting past 100%, which
@@ -681,6 +941,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
   void setSpeed(double speed) {
     _player.setRate(speed);
     state = state.copyWith(playbackSpeed: speed);
+    unawaited(_rememberChannel(speed: speed));
   }
 
   void setRepeatMode(RepeatMode mode) {
@@ -701,6 +962,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
     if (subtitle == null) {
       await _player.setSubtitleTrack(SubtitleTrack.no());
       state = state.copyWith(clearSubtitle: true);
+      await _rememberChannel(clearSubtitle: true);
       return;
     }
     // Route captions through the proxy too: the same TLS limitation
@@ -712,6 +974,92 @@ class PlayerController extends StateNotifier<PlayerStateData>
       SubtitleTrack.uri(local, title: subtitle.name, language: subtitle.code),
     );
     state = state.copyWith(selectedSubtitle: subtitle);
+    await _rememberChannel(subtitleCode: subtitle.code);
+  }
+
+  Future<void> selectAudioTrack(ResolvedAudioTrack track) async {
+    final item = state.currentItem;
+    if (item == null || _switchingQuality) return;
+    _switchingQuality = true;
+    final resumeFrom = state.position;
+    final wasPlaying = state.isPlaying;
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final resolved = await _openStreams(
+        item.videoId,
+        exactHeight: _currentHeight(),
+        audioTrackId: track.id,
+      );
+      if (resumeFrom > Duration.zero) await _player.seek(resumeFrom);
+      if (wasPlaying) await _player.play();
+      state = state.copyWith(
+        isLoading: false,
+        currentVideoUrl: resolved.videoUrl,
+        currentAudioUrl: resolved.audioUrl,
+        currentQualityLabel: resolved.qualityLabel,
+        availableHeights: resolved.availableHeights,
+        audioTracks: resolved.audioTracks,
+        selectedAudioTrackId: resolved.selectedAudioTrackId,
+        sourceClient: resolved.sourceClient,
+        failedClients: resolved.failedClients,
+      );
+      await _rememberChannel(audioTrackId: track.id);
+    } catch (error) {
+      state = state.copyWith(isLoading: false, error: error.toString());
+    } finally {
+      _switchingQuality = false;
+    }
+  }
+
+  void setSubtitleStyle({
+    double? scale,
+    double? offset,
+    double? backgroundOpacity,
+  }) {
+    state = state.copyWith(
+      subtitleScale: scale,
+      subtitleOffset: offset,
+      subtitleBackgroundOpacity: backgroundOpacity,
+    );
+    unawaited(
+      _rememberChannel(
+        subtitleScale: scale,
+        subtitleOffset: offset,
+        subtitleBackgroundOpacity: backgroundOpacity,
+      ),
+    );
+  }
+
+  Future<void> _rememberChannel({
+    double? speed,
+    int? qualityHeight,
+    String? subtitleCode,
+    String? audioTrackId,
+    double? subtitleScale,
+    double? subtitleOffset,
+    double? subtitleBackgroundOpacity,
+    String? videoFit,
+    bool clearSubtitle = false,
+  }) async {
+    final channelId = state.currentItem?.channelId;
+    if (channelId == null || channelId.isEmpty) return;
+    final repository = _ref.read(settingsRepositoryProvider);
+    final current = repository.channelPlaybackPreferences(channelId) ??
+        const ChannelPlaybackPreferences();
+    await repository.saveChannelPlaybackPreferences(
+      channelId,
+      current.copyWith(
+        speed: speed,
+        qualityHeight: qualityHeight,
+        subtitleCode: subtitleCode,
+        audioTrackId: audioTrackId,
+        subtitleScale: subtitleScale,
+        subtitleOffset: subtitleOffset,
+        subtitleBackgroundOpacity: subtitleBackgroundOpacity,
+        videoFit: videoFit,
+        clearSubtitle: clearSubtitle,
+      ),
+    );
   }
 
   /// Pauses playback after [duration]. Pass null to cancel.
@@ -829,6 +1177,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
     WidgetsBinding.instance.removeObserver(this);
     _savePositionTimer?.cancel();
     _sleepTimer?.cancel();
+    _bufferRecoveryTimer?.cancel();
     _saveCurrentPosition();
     for (final sub in _subscriptions) {
       sub.cancel();

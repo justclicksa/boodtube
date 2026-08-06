@@ -1873,6 +1873,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Continue watching'**
   String get continueWatching;
+
+  /// No description provided for @streamClient.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback client'**
+  String get streamClient;
+
+  /// No description provided for @failedClients.
+  ///
+  /// In en, this message translates to:
+  /// **'Rejected clients'**
+  String get failedClients;
+
+  /// No description provided for @networkSpeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Network speed'**
+  String get networkSpeed;
+
+  /// No description provided for @automaticRecoveries.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic recoveries'**
+  String get automaticRecoveries;
+
+  /// No description provided for @fallbackReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Fallback reason'**
+  String get fallbackReason;
+
+  /// No description provided for @noFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get noFallback;
+
+  /// No description provided for @playerShortcuts.
+  ///
+  /// In en, this message translates to:
+  /// **'Player shortcuts'**
+  String get playerShortcuts;
+
+  /// No description provided for @playerShortcutsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose and order the buttons shown over the video'**
+  String get playerShortcutsSubtitle;
+
+  /// No description provided for @homeEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No recommendations yet'**
+  String get homeEmptyTitle;
+
+  /// No description provided for @homeEmptySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh the feed or choose a topic to start exploring'**
+  String get homeEmptySubtitle;
+
+  /// No description provided for @refreshFeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh feed'**
+  String get refreshFeed;
+
+  /// No description provided for @backupAndRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup and restore'**
+  String get backupAndRestore;
+
+  /// No description provided for @exportBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Export backup'**
+  String get exportBackup;
+
+  /// No description provided for @exportBackupSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save settings, blocked channels, subscriptions, favorites and history'**
+  String get exportBackupSubtitle;
+
+  /// No description provided for @restoreBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore backup'**
+  String get restoreBackup;
+
+  /// No description provided for @restoreBackupSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace local settings and library from a BoodTube backup'**
+  String get restoreBackupSubtitle;
+
+  /// No description provided for @restoreBackupConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This replaces the local history, subscriptions, favorites and Watch later list. Downloads are not changed.'**
+  String get restoreBackupConfirm;
+
+  /// No description provided for @backupRestored.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup restored successfully'**
+  String get backupRestored;
+
+  /// No description provided for @backupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The backup could not be processed'**
+  String get backupFailed;
+
+  /// No description provided for @liveChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Live chat'**
+  String get liveChat;
+
+  /// No description provided for @liveChatWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for new messages…'**
+  String get liveChatWaiting;
+
+  /// No description provided for @liveChatReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only live conversation'**
+  String get liveChatReadOnly;
+
+  /// No description provided for @castToTv.
+  ///
+  /// In en, this message translates to:
+  /// **'Cast to TV'**
+  String get castToTv;
+
+  /// No description provided for @castScanning.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for devices on your Wi-Fi…'**
+  String get castScanning;
+
+  /// No description provided for @castNoDevices.
+  ///
+  /// In en, this message translates to:
+  /// **'No Cast devices found'**
+  String get castNoDevices;
+
+  /// No description provided for @castFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start casting'**
+  String get castFailed;
+
+  /// No description provided for @subtitleAppearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Subtitle appearance'**
+  String get subtitleAppearance;
+
+  /// No description provided for @subtitleSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Text size'**
+  String get subtitleSize;
+
+  /// No description provided for @subtitlePosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Vertical position'**
+  String get subtitlePosition;
+
+  /// No description provided for @subtitleBackground.
+  ///
+  /// In en, this message translates to:
+  /// **'Background'**
+  String get subtitleBackground;
 }
 
 class _AppLocalizationsDelegate

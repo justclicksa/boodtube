@@ -1042,4 +1042,98 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get continueWatching => 'تابع المشاهدة';
+
+  @override
+  String get streamClient => 'عميل التشغيل';
+
+  @override
+  String get failedClients => 'العملاء المرفوضون';
+
+  @override
+  String get networkSpeed => 'سرعة الشبكة';
+
+  @override
+  String get automaticRecoveries => 'مرات الاسترداد التلقائي';
+
+  @override
+  String get fallbackReason => 'سبب الانتقال الاحتياطي';
+
+  @override
+  String get noFallback => 'لا يوجد';
+
+  @override
+  String get playerShortcuts => 'اختصارات المشغّل';
+
+  @override
+  String get playerShortcutsSubtitle =>
+      'اختر ورتّب الأزرار التي تظهر فوق الفيديو';
+
+  @override
+  String get homeEmptyTitle => 'لا توجد اقتراحات بعد';
+
+  @override
+  String get homeEmptySubtitle => 'حدّث الصفحة أو اختر موضوعًا لبدء الاستكشاف';
+
+  @override
+  String get refreshFeed => 'تحديث الصفحة';
+
+  @override
+  String get backupAndRestore => 'النسخ الاحتياطي والاستعادة';
+
+  @override
+  String get exportBackup => 'تصدير نسخة احتياطية';
+
+  @override
+  String get exportBackupSubtitle =>
+      'حفظ الإعدادات والقنوات المحظورة والاشتراكات والمفضلة والسجل';
+
+  @override
+  String get restoreBackup => 'استعادة نسخة احتياطية';
+
+  @override
+  String get restoreBackupSubtitle =>
+      'استبدال الإعدادات والمكتبة المحلية من نسخة BoodTube';
+
+  @override
+  String get restoreBackupConfirm =>
+      'سيُستبدل السجل والاشتراكات والمفضلة وقائمة المشاهدة لاحقًا. لن تتغير التنزيلات.';
+
+  @override
+  String get backupRestored => 'تمت استعادة النسخة الاحتياطية بنجاح';
+
+  @override
+  String get backupFailed => 'تعذرت معالجة النسخة الاحتياطية';
+
+  @override
+  String get liveChat => 'الدردشة المباشرة';
+
+  @override
+  String get liveChatWaiting => 'بانتظار رسائل جديدة…';
+
+  @override
+  String get liveChatReadOnly => 'عرض المحادثة المباشرة فقط';
+
+  @override
+  String get castToTv => 'البث إلى التلفزيون';
+
+  @override
+  String get castScanning => 'جارٍ البحث عن أجهزة على شبكة Wi-Fi…';
+
+  @override
+  String get castNoDevices => 'لم يتم العثور على أجهزة بث';
+
+  @override
+  String get castFailed => 'تعذر بدء البث';
+
+  @override
+  String get subtitleAppearance => 'مظهر الترجمة';
+
+  @override
+  String get subtitleSize => 'حجم النص';
+
+  @override
+  String get subtitlePosition => 'الموضع الرأسي';
+
+  @override
+  String get subtitleBackground => 'الخلفية';
 }

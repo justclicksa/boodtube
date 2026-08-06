@@ -235,6 +235,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onChanged: controller.setPictureInPictureEnabled,
             ),
           ),
+          _SettingsRow(
+            keywords: [l10n.playerShortcuts, l10n.playerShortcutsSubtitle],
+            widget: ListTile(
+              leading: const Icon(Icons.tune),
+              title: Text(l10n.playerShortcuts),
+              subtitle: Text(l10n.playerShortcutsSubtitle),
+              onTap: () => _showPlayerShortcutsPicker(settings, controller),
+            ),
+          ),
         ],
       ),
       _SettingsSection(
@@ -340,6 +349,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
           ],
+        ],
+      ),
+      _SettingsSection(
+        title: l10n.backupAndRestore,
+        rows: [
+          _SettingsRow(
+            keywords: [l10n.exportBackup, l10n.exportBackupSubtitle],
+            widget: ListTile(
+              leading: const Icon(Icons.upload_file_outlined),
+              title: Text(l10n.exportBackup),
+              subtitle: Text(l10n.exportBackupSubtitle),
+              onTap: _exportBackup,
+            ),
+          ),
+          _SettingsRow(
+            keywords: [l10n.restoreBackup, l10n.restoreBackupSubtitle],
+            widget: ListTile(
+              leading: const Icon(Icons.restore),
+              title: Text(l10n.restoreBackup),
+              subtitle: Text(l10n.restoreBackupSubtitle),
+              onTap: _restoreBackup,
+            ),
+          ),
         ],
       ),
       _SettingsSection(
@@ -477,6 +509,154 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
     );
   }
+
+  void _showPlayerShortcutsPicker(
+    AppSettings settings,
+    SettingsController controller,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final selected = [...settings.playerQuickActions];
+    final remaining = PlayerQuickAction.values
+        .where((action) => !selected.contains(action))
+        .toList();
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(l10n.playerShortcuts),
+          content: SizedBox(
+            width: 420,
+            height: 420,
+            child: ReorderableListView(
+              children: [
+                for (final action in [...selected, ...remaining])
+                  CheckboxListTile(
+                    key: ValueKey(action),
+                    value: selected.contains(action),
+                    secondary: Icon(_quickActionIcon(action)),
+                    title: Text(_quickActionLabel(l10n, action)),
+                    onChanged: action == PlayerQuickAction.settings
+                        ? null
+                        : (enabled) {
+                            setDialogState(() {
+                              if (enabled ?? false) {
+                                remaining.remove(action);
+                                selected.insert(
+                                  (selected.length - 1)
+                                      .clamp(0, selected.length),
+                                  action,
+                                );
+                              } else {
+                                selected.remove(action);
+                                remaining.add(action);
+                              }
+                            });
+                          },
+                  ),
+              ],
+              onReorder: (oldIndex, newIndex) {
+                final all = [...selected, ...remaining];
+                final action = all[oldIndex];
+                if (!selected.contains(action)) return;
+                setDialogState(() {
+                  if (newIndex > oldIndex) newIndex--;
+                  final selectedIndex = selected.indexOf(action);
+                  selected.removeAt(selectedIndex);
+                  selected.insert(newIndex.clamp(0, selected.length), action);
+                });
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+            ),
+            FilledButton(
+              onPressed: () {
+                controller.setPlayerQuickActions(selected);
+                Navigator.pop(dialogContext);
+              },
+              child: Text(MaterialLocalizations.of(context).okButtonLabel),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportBackup() async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref.read(backupServiceProvider).shareBackup();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.backupFailed)),
+      );
+    }
+  }
+
+  Future<void> _restoreBackup() async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.restoreBackup),
+        content: Text(l10n.restoreBackupConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.restoreBackup),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final summary = await ref.read(backupServiceProvider).pickAndRestore();
+      if (summary == null || !mounted) return;
+      ref.read(settingsControllerProvider.notifier).reload();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.backupRestored)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.backupFailed)),
+      );
+    }
+  }
+
+  String _quickActionLabel(
+    AppLocalizations l10n,
+    PlayerQuickAction action,
+  ) =>
+      switch (action) {
+        PlayerQuickAction.cast => l10n.castToTv,
+        PlayerQuickAction.pictureInPicture => l10n.pictureInPicture,
+        PlayerQuickAction.subtitles => l10n.subtitles,
+        PlayerQuickAction.quality => l10n.quality,
+        PlayerQuickAction.speed => l10n.playbackSpeed,
+        PlayerQuickAction.videoFit => l10n.videoZoom,
+        PlayerQuickAction.stats => l10n.statsForNerds,
+        PlayerQuickAction.settings => l10n.settingsTab,
+      };
+
+  IconData _quickActionIcon(PlayerQuickAction action) => switch (action) {
+        PlayerQuickAction.cast => Icons.cast,
+        PlayerQuickAction.pictureInPicture => Icons.picture_in_picture,
+        PlayerQuickAction.subtitles => Icons.closed_caption_outlined,
+        PlayerQuickAction.quality => Icons.high_quality_outlined,
+        PlayerQuickAction.speed => Icons.speed,
+        PlayerQuickAction.videoFit => Icons.aspect_ratio,
+        PlayerQuickAction.stats => Icons.info_outline,
+        PlayerQuickAction.settings => Icons.settings,
+      };
 
   void _showClickbaitPicker(AppSettings settings) {
     final l10n = AppLocalizations.of(context);

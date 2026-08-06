@@ -14,6 +14,15 @@ class ResolvedStream {
   final int? audioBitrate;
   final String qualityLabel;
 
+  /// InnerTube client that produced the playable signed URL.
+  final String sourceClient;
+
+  /// Clients rejected before [sourceClient] succeeded. Exposed in the
+  /// diagnostics panel so an automatic recovery is observable.
+  final List<String> failedClients;
+  final List<ResolvedAudioTrack> audioTracks;
+  final String? selectedAudioTrackId;
+
   /// Every height the manifest offers, highest first — used to populate
   /// the in-player quality picker without a second network round-trip.
   final List<int> availableHeights;
@@ -25,8 +34,40 @@ class ResolvedStream {
     this.videoCodec,
     this.audioBitrate,
     required this.qualityLabel,
+    required this.sourceClient,
+    this.failedClients = const [],
+    this.audioTracks = const [],
+    this.selectedAudioTrackId,
     this.availableHeights = const [],
   });
+}
+
+class ResolvedAudioTrack {
+  const ResolvedAudioTrack({
+    required this.id,
+    required this.label,
+    required this.url,
+    required this.bitrate,
+    required this.isDefault,
+  });
+
+  final String id;
+  final String label;
+  final String url;
+  final int bitrate;
+  final bool isDefault;
+}
+
+class ResolvedCastStream {
+  const ResolvedCastStream({
+    required this.url,
+    required this.contentType,
+    required this.qualityLabel,
+  });
+
+  final String url;
+  final String contentType;
+  final String qualityLabel;
 }
 
 class StreamResolver {
@@ -57,22 +98,71 @@ class StreamResolver {
     MediaFormatQuality quality = MediaFormatQuality.high,
     Future<int> Function(Uri url)? probe,
     int? exactHeight,
+    String? audioTrackId,
   }) async {
     Object? lastError;
+    final failedClients = <String>[];
     for (final client in _clients) {
       try {
-        return await _resolveWithClient(
+        final resolved = await _resolveWithClient(
           videoId,
           client,
           quality,
           probe,
           exactHeight,
+          audioTrackId,
+        );
+        return ResolvedStream(
+          videoUrl: resolved.videoUrl,
+          audioUrl: resolved.audioUrl,
+          videoHeight: resolved.videoHeight,
+          videoCodec: resolved.videoCodec,
+          audioBitrate: resolved.audioBitrate,
+          qualityLabel: resolved.qualityLabel,
+          sourceClient: resolved.sourceClient,
+          failedClients: failedClients,
+          audioTracks: resolved.audioTracks,
+          selectedAudioTrackId: resolved.selectedAudioTrackId,
+          availableHeights: resolved.availableHeights,
         );
       } catch (e) {
         lastError = e;
+        failedClients.add(_clientName(client));
       }
     }
     throw Exception('Failed to resolve stream: $lastError');
+  }
+
+  /// Cast's default receiver accepts one media URL, so use a muxed
+  /// rendition (video + audio) rather than the two adaptive streams mpv
+  /// combines locally.
+  Future<ResolvedCastStream> getCastStream(String videoId) async {
+    Object? lastError;
+    for (final client in _clients) {
+      try {
+        final manifest = await _yt.videos.streamsClient.getManifest(
+          VideoId(videoId),
+          ytClients: [client],
+        );
+        final candidates = manifest.muxed.toList()
+          ..sort((a, b) => b.videoResolution.height.compareTo(
+                a.videoResolution.height,
+              ));
+        if (candidates.isEmpty) throw StateError('No muxed cast stream');
+        final stream = candidates.firstWhere(
+          (candidate) => candidate.videoResolution.height <= 720,
+          orElse: () => candidates.last,
+        );
+        return ResolvedCastStream(
+          url: stream.url.toString(),
+          contentType: stream.codec.mimeType,
+          qualityLabel: stream.qualityLabel,
+        );
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw StateError('Failed to resolve cast stream: $lastError');
   }
 
   Future<ResolvedStream> _resolveWithClient(
@@ -81,6 +171,7 @@ class StreamResolver {
     MediaFormatQuality quality,
     Future<int> Function(Uri url)? probe,
     int? exactHeight,
+    String? audioTrackId,
   ) async {
     try {
       final manifest = await _yt.videos.streamsClient.getManifest(
@@ -99,7 +190,11 @@ class StreamResolver {
       var videoStream = exactHeight != null
           ? _selectExactHeight(manifest.video, exactHeight)
           : _selectVideo(manifest.video, quality);
-      final audioStream = _selectAudio(manifest.audio);
+      final audioStream = _selectAudio(
+        manifest.audio,
+        audioTrackId: audioTrackId,
+      );
+      final audioTracks = _audioTracks(manifest.audio);
 
       if (videoStream == null) {
         throw Exception('No suitable video stream found');
@@ -142,12 +237,19 @@ class StreamResolver {
         videoCodec: videoStream.codec.mimeType,
         audioBitrate: audioStream?.bitrate.bitsPerSecond,
         qualityLabel: videoStream.qualityLabel,
+        sourceClient: _clientName(client),
+        audioTracks: audioTracks,
+        selectedAudioTrackId:
+            audioStream == null ? null : _audioTrackId(audioStream),
         availableHeights: heights,
       );
     } catch (e) {
       throw Exception('Failed to resolve stream: $e');
     }
   }
+
+  static String _clientName(YoutubeApiClient client) =>
+      client.toString().split('.').last;
 
   /// Picks the stream the user explicitly chose from the quality menu,
   /// falling back to the closest height the manifest actually offers.
@@ -246,9 +348,49 @@ class StreamResolver {
   }
 
   /// FIXED: returns the actual best audio stream, not sort().first (which was void)
-  AudioStreamInfo? _selectAudio(List<AudioStreamInfo> streams) {
+  AudioStreamInfo? _selectAudio(
+    List<AudioStreamInfo> streams, {
+    String? audioTrackId,
+  }) {
     if (streams.isEmpty) return null;
-    final sorted = [...streams]..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+    final matching = audioTrackId == null
+        ? streams.where(
+            (stream) =>
+                stream.audioTrack == null || stream.audioTrack!.audioIsDefault,
+          )
+        : streams.where((stream) => _audioTrackId(stream) == audioTrackId);
+    final sorted = [...(matching.isEmpty ? streams : matching)]
+      ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
     return sorted.first; // sorted.first is valid - returns first element
   }
+
+  List<ResolvedAudioTrack> _audioTracks(List<AudioStreamInfo> streams) {
+    final best = <String, AudioStreamInfo>{};
+    for (final stream in streams) {
+      final id = _audioTrackId(stream);
+      final previous = best[id];
+      if (previous == null ||
+          stream.bitrate.bitsPerSecond > previous.bitrate.bitsPerSecond) {
+        best[id] = stream;
+      }
+    }
+    final tracks = [
+      for (final entry in best.entries)
+        ResolvedAudioTrack(
+          id: entry.key,
+          label: entry.value.audioTrack?.displayName ?? 'Original',
+          url: entry.value.url.toString(),
+          bitrate: entry.value.bitrate.bitsPerSecond,
+          isDefault: entry.value.audioTrack?.audioIsDefault ?? true,
+        ),
+    ];
+    tracks.sort((a, b) {
+      if (a.isDefault != b.isDefault) return a.isDefault ? -1 : 1;
+      return a.label.compareTo(b.label);
+    });
+    return tracks;
+  }
+
+  String _audioTrackId(AudioStreamInfo stream) =>
+      stream.audioTrack?.id ?? 'default';
 }

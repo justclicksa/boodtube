@@ -5,7 +5,6 @@
 // ============================================================
 
 import 'package:smarttube_poc/domain/entities/media_item.dart' as domain;
-import 'package:smarttube_poc/domain/entities/media_format.dart' as domain;
 import 'package:smarttube_poc/domain/entities/media_subtitle.dart';
 import 'package:smarttube_poc/domain/entities/chapter_item.dart';
 import 'package:smarttube_poc/domain/entities/sponsor_segment.dart'

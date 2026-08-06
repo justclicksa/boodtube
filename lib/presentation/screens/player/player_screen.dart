@@ -23,6 +23,7 @@ import 'package:screen_brightness/screen_brightness.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/utils/duration_formatter.dart';
+import '../../../data/local/preferences/settings_repository_impl.dart';
 import '../../../domain/entities/chapter_item.dart';
 import '../../../domain/entities/media_item.dart';
 import '../../../domain/entities/sponsor_segment.dart';
@@ -34,12 +35,15 @@ import '../../providers/downloads_providers.dart';
 import '../../providers/local_library_providers.dart';
 import '../../providers/player_providers.dart';
 import '../../providers/repository_providers.dart';
+import '../../providers/settings_providers.dart';
 import '../../routing/app_router.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/video_card.dart';
 import '../comments/comments_screen.dart';
 import 'widgets/player_settings_sheet.dart';
+import 'widgets/live_chat_sheet.dart';
+import 'widgets/cast_device_sheet.dart';
 
 /// How mpv gets frames onto the screen, per platform.
 ///
@@ -452,12 +456,35 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 // ============================================================
 
 /// What the finger currently on the player surface is doing.
-enum _VerticalDrag {
+enum PlayerVerticalDragMode {
   none,
   collapseOrExpand,
   leaveFullscreen,
   brightness,
   volume,
+}
+
+/// Maps the start point of a vertical player gesture to its action.
+/// Extracted so fullscreen navigation remains covered by unit tests.
+PlayerVerticalDragMode playerVerticalDragMode({
+  required bool collapsible,
+  required Offset start,
+  required Size surfaceSize,
+}) {
+  if (collapsible) return PlayerVerticalDragMode.collapseOrExpand;
+
+  // A top-to-bottom swipe is the inverse of portrait's upward fullscreen
+  // gesture, regardless of where it starts horizontally. The broad centre
+  // remains an exit zone; the lower outer edges keep brightness and volume.
+  final startsNearTop = start.dy < surfaceSize.height * 0.35;
+  final inExitColumn =
+      start.dx > surfaceSize.width * 0.2 && start.dx < surfaceSize.width * 0.8;
+  if (startsNearTop || inExitColumn) {
+    return PlayerVerticalDragMode.leaveFullscreen;
+  }
+  return start.dx < surfaceSize.width / 2
+      ? PlayerVerticalDragMode.brightness
+      : PlayerVerticalDragMode.volume;
 }
 
 class _PlayerSurface extends ConsumerStatefulWidget {
@@ -581,33 +608,27 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
   //
   //   portrait, down  → collapse toward the mini player
   //   portrait, up    → go fullscreen
-  //   fullscreen, middle third, down → leave fullscreen
-  //   fullscreen, outer thirds       → brightness (leading) / volume
+  //   fullscreen, top or centre, down → leave fullscreen
+  //   fullscreen, lower outer edges   → brightness (leading) / volume
   //
-  // The thirds are what keep the last two apart: YouTube reserves the
-  // centre of a fullscreen player for the exit gesture and the sides for
-  // brightness and volume, and doing the same means neither has to
-  // guess at the other's intent from velocity.
-  _VerticalDrag _dragMode = _VerticalDrag.none;
+  // The starting region keeps the last two apart. A swipe from the top is
+  // always navigation; lower side gestures remain brightness and volume.
+  PlayerVerticalDragMode _dragMode = PlayerVerticalDragMode.none;
   double _dragTotal = 0;
 
   void _beginVerticalDrag(DragStartDetails details) {
     _dragTotal = 0;
-    if (widget.collapsible) {
-      _dragMode = _VerticalDrag.collapseOrExpand;
+    _dragMode = playerVerticalDragMode(
+      collapsible: widget.collapsible,
+      start: details.globalPosition,
+      surfaceSize: MediaQuery.sizeOf(context),
+    );
+    if (_dragMode == PlayerVerticalDragMode.leaveFullscreen ||
+        _dragMode == PlayerVerticalDragMode.collapseOrExpand) {
       return;
     }
-    // The middle sixty percent leaves fullscreen; only the outer edges
-    // adjust brightness and volume. Splitting it evenly in thirds made
-    // the exit — the gesture people actually reach for — the hardest of
-    // the three to hit.
-    final width = MediaQuery.sizeOf(context).width;
-    final x = details.globalPosition.dx;
-    if (x > width * 0.2 && x < width * 0.8) {
-      _dragMode = _VerticalDrag.leaveFullscreen;
-      return;
-    }
-    _dragMode = x < width / 2 ? _VerticalDrag.brightness : _VerticalDrag.volume;
+    // The policy keeps exit navigation and media adjustments from fighting
+    // over the same drag.
     widget.onGestureStart();
   }
 
@@ -615,16 +636,16 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
     final delta = details.primaryDelta ?? 0;
     _dragTotal += delta;
     switch (_dragMode) {
-      case _VerticalDrag.collapseOrExpand:
+      case PlayerVerticalDragMode.collapseOrExpand:
         // Only downward moves the sheet; an upward drag is read on
         // release instead, so it cannot fight the page scrolling below.
         if (delta > 0 || _dragTotal > 0) widget.onCollapseDragUpdate(delta);
-      case _VerticalDrag.brightness:
+      case PlayerVerticalDragMode.brightness:
         widget.onBrightnessDelta(-delta / MediaQuery.sizeOf(context).height);
-      case _VerticalDrag.volume:
+      case PlayerVerticalDragMode.volume:
         widget.onVolumeDelta(-delta / MediaQuery.sizeOf(context).height);
-      case _VerticalDrag.leaveFullscreen:
-      case _VerticalDrag.none:
+      case PlayerVerticalDragMode.leaveFullscreen:
+      case PlayerVerticalDragMode.none:
         break;
     }
   }
@@ -632,23 +653,23 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
   void _endVerticalDrag(double velocity) {
     final mode = _dragMode;
     final total = _dragTotal;
-    _dragMode = _VerticalDrag.none;
+    _dragMode = PlayerVerticalDragMode.none;
     _dragTotal = 0;
 
     switch (mode) {
-      case _VerticalDrag.collapseOrExpand:
+      case PlayerVerticalDragMode.collapseOrExpand:
         if (total < -60 || velocity < -700) {
           widget.onCollapseDragEnd(0); // let the sheet settle back first
           widget.onToggleFullscreen();
         } else {
           widget.onCollapseDragEnd(velocity);
         }
-      case _VerticalDrag.leaveFullscreen:
+      case PlayerVerticalDragMode.leaveFullscreen:
         if (total > 60 || velocity > 700) widget.onToggleFullscreen();
-      case _VerticalDrag.brightness:
-      case _VerticalDrag.volume:
+      case PlayerVerticalDragMode.brightness:
+      case PlayerVerticalDragMode.volume:
         widget.onGestureEnd();
-      case _VerticalDrag.none:
+      case PlayerVerticalDragMode.none:
         break;
     }
   }
@@ -700,6 +721,23 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
                 controls: null,
                 fit: _fit,
                 fill: Colors.black,
+                subtitleViewConfiguration: SubtitleViewConfiguration(
+                  style: TextStyle(
+                    height: 1.35,
+                    fontSize: 28 * state.subtitleScale,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    backgroundColor: Colors.black.withValues(
+                      alpha: state.subtitleBackgroundOpacity,
+                    ),
+                  ),
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    0,
+                    AppSpacing.lg,
+                    state.subtitleOffset,
+                  ),
+                ),
                 // media_kit_video defaults this to true and calls
                 // player.pause() the moment the app backgrounds. That is
                 // the right default for a widget that assumes you are
@@ -882,8 +920,12 @@ class _ControlsOverlay extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
     final controller = ref.read(playerControllerProvider.notifier);
+    final quickActions = ref.watch(
+      settingsControllerProvider.select(
+        (settings) => settings.playerQuickActions,
+      ),
+    );
 
     // Slider and IconButton both require a Material ancestor, and this
     // overlay cannot rely on the Scaffold's: the player surface is
@@ -923,28 +965,16 @@ class _ControlsOverlay extends ConsumerWidget {
                 // needs an AVPlayerLayer the system owns, and mpv renders
                 // into a texture — so the button would never do anything
                 // but show an apology.
-                if (PiPManager.isAvailableOnThisPlatform)
-                  IconButton(
-                    tooltip: l10n.pictureInPicture,
-                    icon: const Icon(Icons.picture_in_picture_alt_outlined,
-                        color: Colors.white),
-                    onPressed: () async {
-                      final ok = await PiPManager.enterPiP();
-                      if (!ok && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(l10n.pipUnavailable)),
-                        );
-                      }
-                    },
-                  ),
-                IconButton(
-                  tooltip: l10n.settingsTab,
-                  icon: const Icon(Icons.settings, color: Colors.white),
-                  onPressed: () {
-                    onInteract();
-                    showPlayerSettings(context);
-                  },
-                ),
+                for (final action in quickActions)
+                  if (action != PlayerQuickAction.pictureInPicture ||
+                      PiPManager.isAvailableOnThisPlatform)
+                    _QuickActionButton(
+                      action: action,
+                      item: state.currentItem,
+                      hasSubtitles:
+                          state.currentItem?.subtitles.isNotEmpty ?? false,
+                      onInteract: onInteract,
+                    ),
               ],
             ),
 
@@ -1014,6 +1044,111 @@ class _ControlsOverlay extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _QuickActionButton extends StatelessWidget {
+  const _QuickActionButton({
+    required this.action,
+    required this.item,
+    required this.hasSubtitles,
+    required this.onInteract,
+  });
+
+  final PlayerQuickAction action;
+  final MediaItem? item;
+  final bool hasSubtitles;
+  final VoidCallback onInteract;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final enabled = switch (action) {
+      PlayerQuickAction.cast => item != null,
+      PlayerQuickAction.subtitles => hasSubtitles,
+      _ => true,
+    };
+    if (action == PlayerQuickAction.cast) {
+      return IconButton(
+        tooltip: l10n.castToTv,
+        icon: Icon(Icons.cast, color: enabled ? Colors.white : Colors.white38),
+        onPressed: !enabled
+            ? null
+            : () async {
+                onInteract();
+                await showCastDeviceSheet(context, item!);
+              },
+      );
+    }
+    if (action == PlayerQuickAction.pictureInPicture) {
+      return IconButton(
+        tooltip: l10n.pictureInPicture,
+        icon: const Icon(
+          Icons.picture_in_picture_alt_outlined,
+          color: Colors.white,
+        ),
+        onPressed: () async {
+          onInteract();
+          final ok = await PiPManager.enterPiP();
+          if (!ok && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(l10n.pipUnavailable)),
+            );
+          }
+        },
+      );
+    }
+    final (icon, tooltip, page) = switch (action) {
+      PlayerQuickAction.cast => (Icons.cast, l10n.castToTv, null),
+      PlayerQuickAction.pictureInPicture => (
+          Icons.picture_in_picture_alt_outlined,
+          l10n.pictureInPicture,
+          null,
+        ),
+      PlayerQuickAction.subtitles => (
+          Icons.closed_caption_outlined,
+          l10n.subtitles,
+          PlayerSettingsPage.subtitles,
+        ),
+      PlayerQuickAction.quality => (
+          Icons.high_quality_outlined,
+          l10n.quality,
+          PlayerSettingsPage.quality,
+        ),
+      PlayerQuickAction.speed => (
+          Icons.speed,
+          l10n.playbackSpeed,
+          PlayerSettingsPage.speed,
+        ),
+      PlayerQuickAction.videoFit => (
+          Icons.aspect_ratio,
+          l10n.videoZoom,
+          PlayerSettingsPage.videoFit,
+        ),
+      PlayerQuickAction.stats => (
+          Icons.info_outline,
+          l10n.statsForNerds,
+          PlayerSettingsPage.stats,
+        ),
+      PlayerQuickAction.settings => (
+          Icons.settings,
+          l10n.settingsTab,
+          PlayerSettingsPage.root,
+        ),
+    };
+
+    return IconButton(
+      tooltip: tooltip,
+      icon: Icon(icon, color: enabled ? Colors.white : Colors.white38),
+      onPressed: !enabled
+          ? null
+          : () async {
+              onInteract();
+              if (context.mounted && page != null) {
+                await showPlayerSettings(context, initialPage: page);
+              }
+            },
     );
   }
 }
@@ -1369,6 +1504,12 @@ class _WatchDetails extends ConsumerWidget {
                 // of being replaced by a page.
                 onTap: () => showCommentsSheet(context, item.videoId),
               ),
+              if (item.isLive)
+                _ActionPill(
+                  icon: Icons.chat_bubble_outline,
+                  label: l10n.liveChat,
+                  onTap: () => showLiveChatSheet(context, item.videoId),
+                ),
             ],
           ),
         ),

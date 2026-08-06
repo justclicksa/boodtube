@@ -7,6 +7,7 @@
 
 // RepeatMode also exists in Flutter's animation library.
 import 'package:flutter/material.dart' hide RepeatMode;
+import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../domain/entities/media_subtitle.dart';
@@ -24,7 +25,12 @@ import '../../../theme/app_theme.dart';
 /// obvious way to write this — uses the popped route's context for the
 /// push, which silently does nothing: the submenu never appeared and the
 /// tap fell through to the page behind the sheet.
-Future<void> showPlayerSettings(BuildContext context) {
+enum PlayerSettingsPage { root, quality, speed, subtitles, videoFit, stats }
+
+Future<void> showPlayerSettings(
+  BuildContext context, {
+  PlayerSettingsPage initialPage = PlayerSettingsPage.root,
+}) {
   // Surface and shape both come from the theme's bottomSheetTheme, so
   // this sheet is dark in the dark theme and light in the light one —
   // it used to be a hardcoded #212121 with white text on top of it.
@@ -34,9 +40,18 @@ Future<void> showPlayerSettings(BuildContext context) {
     constraints: BoxConstraints(
       maxHeight: MediaQuery.sizeOf(context).height * 0.75,
     ),
-    builder: (_) => const _SettingsSheet(),
+    builder: (_) => _SettingsSheet(initialPage: _sheetPage(initialPage)),
   );
 }
+
+_SheetPage _sheetPage(PlayerSettingsPage page) => switch (page) {
+      PlayerSettingsPage.root => _SheetPage.root,
+      PlayerSettingsPage.quality => _SheetPage.quality,
+      PlayerSettingsPage.speed => _SheetPage.speed,
+      PlayerSettingsPage.subtitles => _SheetPage.subtitles,
+      PlayerSettingsPage.videoFit => _SheetPage.videoFit,
+      PlayerSettingsPage.stats => _SheetPage.stats,
+    };
 
 /// Which page the sheet is showing.
 enum _SheetPage {
@@ -44,6 +59,7 @@ enum _SheetPage {
   quality,
   speed,
   subtitles,
+  audio,
   repeat,
   sleep,
   sponsorBlock,
@@ -55,14 +71,22 @@ enum _SheetPage {
 }
 
 class _SettingsSheet extends StatefulWidget {
-  const _SettingsSheet();
+  const _SettingsSheet({required this.initialPage});
+
+  final _SheetPage initialPage;
 
   @override
   State<_SettingsSheet> createState() => _SettingsSheetState();
 }
 
 class _SettingsSheetState extends State<_SettingsSheet> {
-  _SheetPage _page = _SheetPage.root;
+  late _SheetPage _page;
+
+  @override
+  void initState() {
+    super.initState();
+    _page = widget.initialPage;
+  }
 
   void _open(_SheetPage page) => setState(() => _page = page);
   void _back() => setState(() => _page = _SheetPage.root);
@@ -74,6 +98,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
       _SheetPage.quality => _QualityMenu(onBack: _back),
       _SheetPage.speed => _SpeedMenu(onBack: _back),
       _SheetPage.subtitles => _SubtitlesMenu(onBack: _back),
+      _SheetPage.audio => _AudioTrackMenu(onBack: _back),
       _SheetPage.repeat => _RepeatMenu(onBack: _back),
       _SheetPage.sleep => _SleepTimerMenu(onBack: _back),
       _SheetPage.sponsorBlock => _SponsorBlockMenu(onBack: _back),
@@ -126,6 +151,19 @@ class _RootMenu extends ConsumerWidget {
                   (subtitles.isEmpty ? l10n.unavailable : l10n.off),
               enabled: subtitles.isNotEmpty,
               onTap: () => onOpen(_SheetPage.subtitles),
+            ),
+            _MenuRow(
+              icon: Icons.audiotrack_outlined,
+              title: l10n.audioTrack,
+              value: state.audioTracks
+                      .where(
+                        (track) => track.id == state.selectedAudioTrackId,
+                      )
+                      .firstOrNull
+                      ?.label ??
+                  l10n.unavailable,
+              enabled: state.audioTracks.length > 1,
+              onTap: () => onOpen(_SheetPage.audio),
             ),
             _MenuRow(
               icon: Icons.repeat,
@@ -337,6 +375,100 @@ class _SubtitlesMenu extends ConsumerWidget {
             },
           ),
       ],
+    );
+  }
+}
+
+class _AudioTrackMenu extends ConsumerWidget {
+  const _AudioTrackMenu({required this.onBack});
+
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final state = ref.watch(playerControllerProvider);
+    return _SubSheet(
+      onBack: onBack,
+      title: l10n.audioTrack,
+      children: [
+        for (final track in state.audioTracks)
+          _CheckRow(
+            label: track.label,
+            selected: track.id == state.selectedAudioTrackId,
+            onTap: () {
+              Navigator.of(context).pop();
+              ref
+                  .read(playerControllerProvider.notifier)
+                  .selectAudioTrack(track);
+            },
+          ),
+        const Divider(),
+        ListTile(title: Text(l10n.subtitleAppearance)),
+        _SubtitleStyleSlider(
+          label: l10n.subtitleSize,
+          value: state.subtitleScale,
+          min: 0.7,
+          max: 1.6,
+          onChanged: (value) => ref
+              .read(playerControllerProvider.notifier)
+              .setSubtitleStyle(scale: value),
+        ),
+        _SubtitleStyleSlider(
+          label: l10n.subtitlePosition,
+          value: state.subtitleOffset,
+          min: 8,
+          max: 140,
+          onChanged: (value) => ref
+              .read(playerControllerProvider.notifier)
+              .setSubtitleStyle(offset: value),
+        ),
+        _SubtitleStyleSlider(
+          label: l10n.subtitleBackground,
+          value: state.subtitleBackgroundOpacity,
+          min: 0,
+          max: 0.95,
+          onChanged: (value) => ref
+              .read(playerControllerProvider.notifier)
+              .setSubtitleStyle(backgroundOpacity: value),
+        ),
+      ],
+    );
+  }
+}
+
+class _SubtitleStyleSlider extends StatelessWidget {
+  const _SubtitleStyleSlider({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      child: Row(
+        children: [
+          SizedBox(width: 110, child: Text(label)),
+          Expanded(
+            child: Slider(
+              value: value.clamp(min, max),
+              min: min,
+              max: max,
+              onChanged: onChanged,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -659,6 +791,22 @@ class _StatsMenu extends ConsumerWidget {
               : l10n.separateStream,
         ),
         _StatRow(l10n.buffered, '${state.buffered.inSeconds}s'),
+        _StatRow(l10n.streamClient, state.sourceClient ?? '—'),
+        _StatRow(
+          l10n.failedClients,
+          state.failedClients.isEmpty ? '—' : state.failedClients.join(', '),
+        ),
+        _StatRow(
+          l10n.networkSpeed,
+          state.networkMbps <= 0
+              ? '—'
+              : '${state.networkMbps.toStringAsFixed(1)} Mbps',
+        ),
+        _StatRow(l10n.automaticRecoveries, '${state.recoveryCount}'),
+        _StatRow(
+          l10n.fallbackReason,
+          state.fallbackReason ?? l10n.noFallback,
+        ),
         _StatRow(l10n.speed, '${_trim(state.playbackSpeed)}x'),
         _StatRow(l10n.sponsorSegments, '${state.sponsorSegments.length}'),
       ],

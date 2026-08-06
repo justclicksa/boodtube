@@ -5,11 +5,95 @@
 // يخزن في SharedPreferences (key-value).
 // ============================================================
 
+import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../domain/entities/content_filter.dart';
 import '../../../domain/entities/media_format.dart';
 import '../../../domain/entities/sponsor_segment.dart';
+
+enum PlayerQuickAction {
+  cast,
+  pictureInPicture,
+  subtitles,
+  quality,
+  speed,
+  videoFit,
+  stats,
+  settings
+}
+
+class ChannelPlaybackPreferences {
+  const ChannelPlaybackPreferences({
+    this.speed,
+    this.qualityHeight,
+    this.subtitleCode,
+    this.audioTrackId,
+    this.subtitleScale,
+    this.subtitleOffset,
+    this.subtitleBackgroundOpacity,
+    this.videoFit,
+  });
+
+  final double? speed;
+  final int? qualityHeight;
+  final String? subtitleCode;
+  final String? audioTrackId;
+  final double? subtitleScale;
+  final double? subtitleOffset;
+  final double? subtitleBackgroundOpacity;
+  final String? videoFit;
+
+  ChannelPlaybackPreferences copyWith({
+    double? speed,
+    int? qualityHeight,
+    String? subtitleCode,
+    String? audioTrackId,
+    double? subtitleScale,
+    double? subtitleOffset,
+    double? subtitleBackgroundOpacity,
+    String? videoFit,
+    bool clearSubtitle = false,
+  }) =>
+      ChannelPlaybackPreferences(
+        speed: speed ?? this.speed,
+        qualityHeight: qualityHeight ?? this.qualityHeight,
+        subtitleCode:
+            clearSubtitle ? null : (subtitleCode ?? this.subtitleCode),
+        audioTrackId: audioTrackId ?? this.audioTrackId,
+        subtitleScale: subtitleScale ?? this.subtitleScale,
+        subtitleOffset: subtitleOffset ?? this.subtitleOffset,
+        subtitleBackgroundOpacity:
+            subtitleBackgroundOpacity ?? this.subtitleBackgroundOpacity,
+        videoFit: videoFit ?? this.videoFit,
+      );
+
+  Map<String, Object?> toJson() => {
+        if (speed != null) 'speed': speed,
+        if (qualityHeight != null) 'qualityHeight': qualityHeight,
+        if (subtitleCode != null) 'subtitleCode': subtitleCode,
+        if (audioTrackId != null) 'audioTrackId': audioTrackId,
+        if (subtitleScale != null) 'subtitleScale': subtitleScale,
+        if (subtitleOffset != null) 'subtitleOffset': subtitleOffset,
+        if (subtitleBackgroundOpacity != null)
+          'subtitleBackgroundOpacity': subtitleBackgroundOpacity,
+        if (videoFit != null) 'videoFit': videoFit,
+      };
+
+  factory ChannelPlaybackPreferences.fromJson(Map<String, Object?> json) =>
+      ChannelPlaybackPreferences(
+        speed: (json['speed'] as num?)?.toDouble(),
+        qualityHeight: (json['qualityHeight'] as num?)?.toInt(),
+        subtitleCode: json['subtitleCode'] as String?,
+        audioTrackId: json['audioTrackId'] as String?,
+        subtitleScale: (json['subtitleScale'] as num?)?.toDouble(),
+        subtitleOffset: (json['subtitleOffset'] as num?)?.toDouble(),
+        subtitleBackgroundOpacity:
+            (json['subtitleBackgroundOpacity'] as num?)?.toDouble(),
+        videoFit: json['videoFit'] as String?,
+      );
+}
 
 class AppSettings {
   final AppThemeMode themeMode;
@@ -39,6 +123,10 @@ class AppSettings {
   /// Show the time left instead of the total duration.
   final bool showRemainingTime;
 
+  /// Ordered shortcuts shown in the player's top bar. The settings gear
+  /// is always retained as an escape hatch even if an old backup omits it.
+  final List<PlayerQuickAction> playerQuickActions;
+
   const AppSettings({
     this.themeMode = AppThemeMode.dark,
     this.defaultQuality = MediaFormatQuality.highest,
@@ -62,6 +150,12 @@ class AppSettings {
     this.clickbaitThumbnail = ClickbaitThumbnail.original,
     this.deArrowEnabled = false,
     this.showRemainingTime = false,
+    this.playerQuickActions = const [
+      PlayerQuickAction.cast,
+      PlayerQuickAction.pictureInPicture,
+      PlayerQuickAction.subtitles,
+      PlayerQuickAction.settings,
+    ],
   });
 
   AppSettings copyWith({
@@ -81,6 +175,7 @@ class AppSettings {
     ClickbaitThumbnail? clickbaitThumbnail,
     bool? deArrowEnabled,
     bool? showRemainingTime,
+    List<PlayerQuickAction>? playerQuickActions,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -100,6 +195,7 @@ class AppSettings {
       clickbaitThumbnail: clickbaitThumbnail ?? this.clickbaitThumbnail,
       deArrowEnabled: deArrowEnabled ?? this.deArrowEnabled,
       showRemainingTime: showRemainingTime ?? this.showRemainingTime,
+      playerQuickActions: playerQuickActions ?? this.playerQuickActions,
     );
   }
 }
@@ -124,6 +220,8 @@ class SettingsRepository {
   static const _keyClickbait = 'settings.clickbait_thumbnail';
   static const _keyDeArrow = 'settings.dearrow';
   static const _keyRemainingTime = 'settings.remaining_time';
+  static const _keyPlayerQuickActions = 'settings.player_quick_actions';
+  static const _keyChannelPlayback = 'settings.channel_playback';
 
   final SharedPreferences _prefs;
 
@@ -151,6 +249,7 @@ class SettingsRepository {
       ),
       deArrowEnabled: _prefs.getBool(_keyDeArrow) ?? false,
       showRemainingTime: _prefs.getBool(_keyRemainingTime) ?? false,
+      playerQuickActions: _readPlayerQuickActions(),
     );
   }
 
@@ -250,6 +349,78 @@ class SettingsRepository {
 
   Future<void> setShowRemainingTime(bool enabled) async {
     await _prefs.setBool(_keyRemainingTime, enabled);
+  }
+
+  Future<void> setPlayerQuickActions(List<PlayerQuickAction> actions) async {
+    final normalized = <PlayerQuickAction>[
+      ...actions.where((action) => action != PlayerQuickAction.settings),
+      PlayerQuickAction.settings,
+    ];
+    await _prefs.setStringList(
+      _keyPlayerQuickActions,
+      normalized.map((action) => action.name).toList(),
+    );
+  }
+
+  Map<String, ChannelPlaybackPreferences> _readChannelPlaybackMap() {
+    final raw = _prefs.getString(_keyChannelPlayback);
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      return decoded.map(
+        (channelId, value) => MapEntry(
+          channelId,
+          ChannelPlaybackPreferences.fromJson(
+            Map<String, Object?>.from(value as Map),
+          ),
+        ),
+      );
+    } catch (_) {
+      return {};
+    }
+  }
+
+  ChannelPlaybackPreferences? channelPlaybackPreferences(String channelId) =>
+      channelId.isEmpty ? null : _readChannelPlaybackMap()[channelId];
+
+  Future<void> saveChannelPlaybackPreferences(
+    String channelId,
+    ChannelPlaybackPreferences preferences,
+  ) async {
+    if (channelId.isEmpty) return;
+    final current = _readChannelPlaybackMap()..[channelId] = preferences;
+    // Keep the preference file bounded even after years of use.
+    while (current.length > 500) {
+      current.remove(current.keys.first);
+    }
+    await _prefs.setString(
+      _keyChannelPlayback,
+      jsonEncode(current.map((key, value) => MapEntry(key, value.toJson()))),
+    );
+  }
+
+  List<PlayerQuickAction> _readPlayerQuickActions() {
+    final stored = _prefs.getStringList(_keyPlayerQuickActions);
+    if (stored == null) {
+      return const [
+        PlayerQuickAction.cast,
+        PlayerQuickAction.pictureInPicture,
+        PlayerQuickAction.subtitles,
+        PlayerQuickAction.settings,
+      ];
+    }
+    final actions = stored
+        .map(
+          (name) => PlayerQuickAction.values
+              .where((action) => action.name == name)
+              .firstOrNull,
+        )
+        .whereType<PlayerQuickAction>()
+        .toList();
+    if (!actions.contains(PlayerQuickAction.settings)) {
+      actions.add(PlayerQuickAction.settings);
+    }
+    return actions;
   }
 
   Set<HiddenContent> _readHiddenContent() {
