@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'l10n/app_localizations.dart';
 
 import 'data/local/preferences/settings_repository_impl.dart';
+import 'presentation/l10n/locale_preference.dart';
 import 'presentation/providers/player_providers.dart';
 import 'presentation/providers/repository_providers.dart';
 import 'presentation/providers/settings_providers.dart';
@@ -24,6 +25,14 @@ void main() async {
 
   // Initialize SharedPreferences synchronously
   final prefs = await SharedPreferences.getInstance();
+
+  // The app follows the device language until the user says otherwise.
+  // SettingsRepository falls back to 'en' when the key is absent and so
+  // cannot tell an untouched install from a deliberate English choice —
+  // stamping the sentinel once, here, makes every later read unambiguous.
+  if (!prefs.containsKey(languagePrefsKey)) {
+    await prefs.setString(languagePrefsKey, systemLanguageCode);
+  }
 
   // The audio handler owns the same Player instance the UI drives, so
   // background playback and the notification stay in sync with the
@@ -46,11 +55,23 @@ void main() async {
         'data',
         'crypto',
       ],
-      title: 'SmartTube',
+      title: 'BoodTube',
     ),
   );
   await _tunePlayerCache(player);
-  final audioHandler = await setupAudioService(player);
+
+  // Nothing on the way to runApp is allowed to decide whether the app
+  // renders. audio_service talks to platform channels that can throw or
+  // simply never answer, and awaiting it unguarded turned a background
+  // playback problem into a permanently blank screen. Without the
+  // handler the app loses the lock screen controls; without runApp it
+  // loses everything.
+  final audioHandler = await setupAudioService(player)
+      .timeout(const Duration(seconds: 10))
+      .catchError((Object e) {
+    debugPrint('audio service unavailable, continuing without it: $e');
+    return SmartTubeAudioHandler(player);
+  });
 
   runApp(
     ProviderScope(
@@ -106,15 +127,16 @@ class SmartTubeApp extends ConsumerWidget {
     final settings = ref.watch(settingsControllerProvider);
 
     return MaterialApp.router(
-      title: 'SmartTube',
+      title: 'BoodTube',
       debugShowCheckedModeBanner: false,
 
       // FIXED: Localization delegates
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      locale: settings.language == 'ar'
-          ? const Locale('ar')
-          : const Locale('en'),
+      // null means "system default": Flutter resolves the device locale
+      // against supportedLocales itself, so an Arabic phone opens in
+      // Arabic without the user touching settings.
+      locale: localeForLanguage(settings.language),
 
       // Theme
       theme: AppTheme.light(),

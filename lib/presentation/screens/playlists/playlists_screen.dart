@@ -63,7 +63,7 @@ class PlaylistsScreen extends ConsumerWidget {
                 ),
               );
             },
-            loading: () => const LoadingView(),
+            loading: () => const SkeletonList(style: SkeletonStyle.playlistRow),
             error: (e, _) => ErrorView(
               error: e,
               onRetry: () => ref.invalidate(playlistsProvider),
@@ -96,24 +96,27 @@ class _PlaylistRow extends StatelessWidget {
     };
 
     return ListTile(
-      leading: SizedBox(
-        width: 88,
-        height: 50,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: playlist.thumbnailUrl != null
-              ? CachedNetworkImage(
-                  imageUrl: playlist.thumbnailUrl!,
-                  fit: BoxFit.cover,
-                  errorWidget: (_, __, ___) => ColoredBox(
+      minTileHeight: AppSpacing.minTapTarget,
+      leading: ExcludeSemantics(
+        child: SizedBox(
+          width: 88,
+          height: 50,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: playlist.thumbnailUrl != null
+                ? CachedNetworkImage(
+                    imageUrl: playlist.thumbnailUrl!,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) => ColoredBox(
+                      color: theme.yt.chipBackground,
+                      child: Icon(icon, color: theme.yt.secondaryText),
+                    ),
+                  )
+                : ColoredBox(
                     color: theme.yt.chipBackground,
                     child: Icon(icon, color: theme.yt.secondaryText),
                   ),
-                )
-              : ColoredBox(
-                  color: theme.yt.chipBackground,
-                  child: Icon(icon, color: theme.yt.secondaryText),
-                ),
+          ),
         ),
       ),
       title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -173,7 +176,7 @@ class PlaylistScreen extends ConsumerWidget {
             ),
           );
         },
-        loading: () => const LoadingView(),
+        loading: () => const SkeletonList(style: SkeletonStyle.compactRow),
         error: (e, _) => ErrorView(
           error: e,
           onRetry: () => ref.invalidate(playlistVideosProvider(playlistId)),

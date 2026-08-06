@@ -4,7 +4,15 @@
 // يطبّق contract من domain ويستخدم InnerTubeClient.
 // ============================================================
 
+import 'dart:math' show Random;
+
+import 'package:youtube_explode_dart/youtube_explode_dart.dart' show Video;
+
+import '../../domain/entities/channel_info.dart';
 import '../../domain/entities/media_group.dart';
+import '../../domain/entities/media_item.dart';
+import '../../domain/entities/media_page.dart';
+import '../../domain/entities/playlist_info.dart';
 import '../../domain/repositories/content_repository.dart';
 import '../../domain/repositories/local_library_repository.dart' as domain;
 import '../../core/utils/result.dart';
@@ -20,28 +28,81 @@ class ContentRepositoryImpl implements ContentRepository {
 
   ContentRepositoryImpl(this._client, this._db);
 
-  /// Topic shelves that make up the home feed. Kept distinct from the
-  /// trending row so the home screen isn't the same list twice.
-  static const _homeShelves = <String, String>{
+  /// The pool the home feed draws its shelves from.
+  ///
+  /// Signed out there is no personalised feed to ask for, so home is
+  /// assembled from topic searches. Four fixed queries meant the same
+  /// four shelves in the same order every single launch — the screen
+  /// never looked like it had been anywhere. A handful are drawn from
+  /// this pool per load instead, so home has something new on it each
+  /// time the way YouTube's does.
+  static const _homeShelfPool = <String, String>{
     'Music': 'music 2026',
     'Gaming': 'gaming highlights',
     'Technology': 'tech review',
     'News': 'news today',
+    'Podcasts': 'podcast episode 2026',
+    'Football': 'football highlights 2026',
+    'Cooking': 'easy recipes 2026',
+    'Documentary': 'documentary 2026',
+    'Comedy': 'stand up comedy 2026',
+    'Science': 'science explained 2026',
+    'Travel': 'travel vlog 2026',
+    'Cars': 'car review 2026',
+    'Fitness': 'workout routine 2026',
+    'Learning': 'tutorial 2026',
   };
 
+  /// How many shelves one home load asks for. More is slower to first
+  /// paint and the extra rarely gets scrolled to.
+  static const _homeShelfCount = 5;
+
+  static final _shelfPicker = Random();
+
+  /// A fresh handful of shelves, in a fresh order.
+  static Iterable<MapEntry<String, String>> _pickHomeShelves() {
+    final pool = _homeShelfPool.entries.toList()..shuffle(_shelfPicker);
+    return pool.take(_homeShelfCount);
+  }
+
+  /// Videos → items, carrying the channel avatar when the caller knows
+  /// it (a channel page does; a search result does not).
+  static List<MediaItem> _items(
+    Iterable<Video> videos, {
+    String? channelAvatarUrl,
+  }) =>
+      videos
+          .map((v) =>
+              MediaItemMapper.fromVideo(v, channelAvatarUrl: channelAvatarUrl))
+          .toList();
+
   @override
-  Future<Result<List<MediaGroup>>> getHomeFeed() async {
+  Future<Result<List<MediaGroup>>> getHomeFeed({String? pageToken}) async {
     try {
+      // A token continues one shelf, not the whole screen: each shelf is
+      // its own query, so the caller pages them independently.
+      if (pageToken != null) {
+        final page = await _client.continuePage(pageToken);
+        return Success([
+          MediaGroup(
+            title: '',
+            type: MediaGroupType.recommended,
+            mediaItems: _items(page.videos),
+            nextPageToken: page.nextPageToken,
+          ),
+        ]);
+      }
+
       final results = await Future.wait(
-        _homeShelves.entries.map((entry) async {
+        _pickHomeShelves().map((entry) async {
           try {
-            final videos = await _client.search(entry.value);
-            if (videos.isEmpty) return null;
+            final page = await _client.searchPage(entry.value);
+            if (page.videos.isEmpty) return null;
             return MediaGroup(
               title: entry.key,
               type: MediaGroupType.recommended,
-              mediaItems:
-                  videos.take(15).map(MediaItemMapper.fromVideo).toList(),
+              mediaItems: _items(page.videos),
+              nextPageToken: page.nextPageToken,
             );
           } catch (_) {
             // One failing shelf must not blank the whole home screen.
@@ -77,10 +138,7 @@ class ContentRepositoryImpl implements ContentRepository {
         MediaGroup(
           title: 'Trending Now',
           type: MediaGroupType.trending,
-          mediaItems: videos
-              .take(30)
-              .map(MediaItemMapper.fromVideo)
-              .toList(),
+          mediaItems: _items(videos),
         ),
       ]);
     } on AppException catch (e) {
@@ -95,7 +153,7 @@ class ContentRepositoryImpl implements ContentRepository {
   }
 
   @override
-  Future<Result<List<MediaGroup>>> getSubscriptionsFeed({String? pageToken}) async {
+  Future<Result<List<MediaGroup>>> getSubscriptionsFeed() async {
     // FIXED: actually loads from local subscriptions + fetches recent videos
     try {
       final localRepo = impl.LocalLibraryRepositoryImpl(_db);
@@ -113,7 +171,8 @@ class ContentRepositoryImpl implements ContentRepository {
         );
       }
 
-      final subscriptions = (subsResult as Success).data as List<domain.LocalSubscription>;
+      final subscriptions =
+          (subsResult as Success).data as List<domain.LocalSubscription>;
       if (subscriptions.isEmpty) {
         return const Success([]);
       }
@@ -122,15 +181,15 @@ class ContentRepositoryImpl implements ContentRepository {
       final groups = <MediaGroup>[];
       for (final sub in subscriptions) {
         try {
-          final videos = await _client.getChannelVideos(sub.channelId);
+          final page = await _client.channelVideosPage(sub.channelId);
           groups.add(MediaGroup(
             title: sub.title,
             type: MediaGroupType.channelVideos,
             channelId: sub.channelId,
-            mediaItems: videos
-                .take(20)
-                .map(MediaItemMapper.fromVideo)
-                .toList(),
+            // The local subscription row already knows the channel's
+            // picture, so every card in this shelf can show it.
+            mediaItems: _items(page.videos, channelAvatarUrl: sub.avatarUrl),
+            nextPageToken: page.nextPageToken,
           ));
         } catch (e) {
           // Skip individual channel errors
@@ -155,15 +214,17 @@ class ContentRepositoryImpl implements ContentRepository {
     SearchFilters filters = const SearchFilters(),
   }) async {
     try {
-      final videos = await _client.search(query);
+      final page = await _client.searchPage(
+        query,
+        filters: filters,
+        pageToken: pageToken,
+      );
       return Success(
         MediaGroup(
           title: 'Results for "$query"',
           type: MediaGroupType.search,
-          mediaItems: videos
-              .take(50)
-              .map(MediaItemMapper.fromVideo)
-              .toList(),
+          mediaItems: _items(page.videos),
+          nextPageToken: page.nextPageToken,
         ),
       );
     } on AppException catch (e) {
@@ -183,24 +244,28 @@ class ContentRepositoryImpl implements ContentRepository {
     String? pageToken,
   }) async {
     try {
-      final channel = await _client.getChannel(channelId);
-      final videos = await _client.getChannelVideos(channelId);
+      final channel = await _client.getChannelInfo(channelId);
+      final page = await _client.channelVideosPage(
+        channelId,
+        pageToken: pageToken,
+      );
 
       return Success(
         ChannelContent(
           channelId: channelId,
           title: channel.title,
-          // FIXED: لا يوجد description property مباشرة في Channel
-          description: null,
-          avatarUrl: channel.logoUrl,
+          description: channel.description,
+          avatarUrl: channel.avatarUrl,
+          bannerUrl: channel.bannerUrl,
+          subscriberCount: channel.subscriberCount,
           shelves: [
             MediaGroup(
               title: 'Videos',
               type: MediaGroupType.channelVideos,
-              mediaItems: videos
-                  .take(30)
-                  .map(MediaItemMapper.fromVideo)
-                  .toList(),
+              channelId: channelId,
+              mediaItems:
+                  _items(page.videos, channelAvatarUrl: channel.avatarUrl),
+              nextPageToken: page.nextPageToken,
             ),
           ],
         ),
@@ -217,20 +282,80 @@ class ContentRepositoryImpl implements ContentRepository {
   }
 
   @override
+  Future<Result<ChannelInfo>> getChannelInfo(String channelId) async {
+    try {
+      return Success(await _client.getChannelInfo(channelId));
+    } on AppException catch (e) {
+      return FailureResult.fromException(e);
+    } catch (e) {
+      return FailureResult(
+        'Failed to load channel info: $e',
+        type: FailureType.unknown,
+        cause: e,
+      );
+    }
+  }
+
+  @override
+  Future<Result<MediaPage>> getChannelVideos(
+    String channelId, {
+    String? pageToken,
+  }) async {
+    try {
+      final page = await _client.channelVideosPage(
+        channelId,
+        pageToken: pageToken,
+      );
+      return Success(
+        MediaPage(
+          items: _items(page.videos),
+          nextPageToken: page.nextPageToken,
+        ),
+      );
+    } on AppException catch (e) {
+      return FailureResult.fromException(e);
+    } catch (e) {
+      return FailureResult(
+        'Failed to load channel videos: $e',
+        type: FailureType.unknown,
+        cause: e,
+      );
+    }
+  }
+
+  @override
+  Future<Result<List<PlaylistInfo>>> getChannelPlaylists(
+    String channelId,
+  ) async {
+    try {
+      return Success(await _client.getChannelPlaylists(channelId));
+    } on AppException catch (e) {
+      return FailureResult.fromException(e);
+    } catch (e) {
+      return FailureResult(
+        'Failed to load channel playlists: $e',
+        type: FailureType.unknown,
+        cause: e,
+      );
+    }
+  }
+
+  @override
   Future<Result<MediaGroup>> getPlaylist(
     String playlistId, {
     String? pageToken,
   }) async {
     try {
-      final videos = await _client.getPlaylistVideos(playlistId);
+      final page = await _client.playlistVideosPage(
+        playlistId,
+        pageToken: pageToken,
+      );
       return Success(
         MediaGroup(
           title: 'Playlist',
           type: MediaGroupType.playlist,
-          mediaItems: videos
-              .take(100)
-              .map(MediaItemMapper.fromVideo)
-              .toList(),
+          mediaItems: _items(page.videos),
+          nextPageToken: page.nextPageToken,
         ),
       );
     } on AppException catch (e) {
@@ -238,6 +363,54 @@ class ContentRepositoryImpl implements ContentRepository {
     } catch (e) {
       return FailureResult(
         'Failed to load playlist: $e',
+        type: FailureType.unknown,
+        cause: e,
+      );
+    }
+  }
+
+  @override
+  Future<Result<MediaPage>> getRelatedVideos(
+    String videoId, {
+    String? pageToken,
+  }) async {
+    try {
+      final page = await _client.relatedVideosPage(
+        videoId,
+        pageToken: pageToken,
+      );
+      return Success(
+        MediaPage(
+          items: _items(page.videos),
+          nextPageToken: page.nextPageToken,
+        ),
+      );
+    } on AppException catch (e) {
+      return FailureResult.fromException(e);
+    } catch (e) {
+      return FailureResult(
+        'Failed to load related videos: $e',
+        type: FailureType.unknown,
+        cause: e,
+      );
+    }
+  }
+
+  @override
+  Future<Result<MediaPage>> loadMore(String pageToken) async {
+    try {
+      final page = await _client.continuePage(pageToken);
+      return Success(
+        MediaPage(
+          items: _items(page.videos),
+          nextPageToken: page.nextPageToken,
+        ),
+      );
+    } on AppException catch (e) {
+      return FailureResult.fromException(e);
+    } catch (e) {
+      return FailureResult(
+        'Failed to load more: $e',
         type: FailureType.unknown,
         cause: e,
       );

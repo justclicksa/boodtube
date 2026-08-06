@@ -10,8 +10,8 @@ import 'package:smarttube_poc/domain/entities/media_item.dart';
 import 'package:smarttube_poc/presentation/providers/repository_providers.dart';
 
 /// Get full media item by videoId
-final mediaItemProvider = FutureProvider.autoDispose
-    .family<MediaItem, String>((ref, videoId) async {
+final mediaItemProvider =
+    FutureProvider.autoDispose.family<MediaItem, String>((ref, videoId) async {
   final repo = ref.watch(mediaItemRepositoryProvider);
   final result = await repo.getMediaItem(videoId);
 

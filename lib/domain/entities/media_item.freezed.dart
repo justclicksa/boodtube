@@ -21,7 +21,17 @@ mixin _$MediaItem {
   String? get description => throw _privateConstructorUsedError; // Channel info
   String get author => throw _privateConstructorUsedError;
   String get channelId => throw _privateConstructorUsedError;
-  String? get channelTitle => throw _privateConstructorUsedError; // Timing
+  String? get channelTitle => throw _privateConstructorUsedError;
+
+  /// The channel's avatar, when the surface that produced this item
+  /// carried one. Feed payloads often do not, so this stays null and
+  /// the card falls back to the channel initial.
+  String? get channelAvatarUrl => throw _privateConstructorUsedError;
+
+  /// The channel's subscriber count. Only the single-video path looks
+  /// this up (the player's channel row shows it); feed items leave it
+  /// null rather than pay for a channel request per card.
+  int? get subscriberCount => throw _privateConstructorUsedError; // Timing
   Duration get duration => throw _privateConstructorUsedError;
   DateTime get publishedAt => throw _privateConstructorUsedError; // Media
   String? get thumbnailUrl => throw _privateConstructorUsedError;
@@ -61,6 +71,8 @@ abstract class $MediaItemCopyWith<$Res> {
       String author,
       String channelId,
       String? channelTitle,
+      String? channelAvatarUrl,
+      int? subscriberCount,
       Duration duration,
       DateTime publishedAt,
       String? thumbnailUrl,
@@ -102,6 +114,8 @@ class _$MediaItemCopyWithImpl<$Res, $Val extends MediaItem>
     Object? author = null,
     Object? channelId = null,
     Object? channelTitle = freezed,
+    Object? channelAvatarUrl = freezed,
+    Object? subscriberCount = freezed,
     Object? duration = null,
     Object? publishedAt = null,
     Object? thumbnailUrl = freezed,
@@ -144,6 +158,14 @@ class _$MediaItemCopyWithImpl<$Res, $Val extends MediaItem>
           ? _value.channelTitle
           : channelTitle // ignore: cast_nullable_to_non_nullable
               as String?,
+      channelAvatarUrl: freezed == channelAvatarUrl
+          ? _value.channelAvatarUrl
+          : channelAvatarUrl // ignore: cast_nullable_to_non_nullable
+              as String?,
+      subscriberCount: freezed == subscriberCount
+          ? _value.subscriberCount
+          : subscriberCount // ignore: cast_nullable_to_non_nullable
+              as int?,
       duration: null == duration
           ? _value.duration
           : duration // ignore: cast_nullable_to_non_nullable
@@ -241,6 +263,8 @@ abstract class _$$MediaItemImplCopyWith<$Res>
       String author,
       String channelId,
       String? channelTitle,
+      String? channelAvatarUrl,
+      int? subscriberCount,
       Duration duration,
       DateTime publishedAt,
       String? thumbnailUrl,
@@ -281,6 +305,8 @@ class __$$MediaItemImplCopyWithImpl<$Res>
     Object? author = null,
     Object? channelId = null,
     Object? channelTitle = freezed,
+    Object? channelAvatarUrl = freezed,
+    Object? subscriberCount = freezed,
     Object? duration = null,
     Object? publishedAt = null,
     Object? thumbnailUrl = freezed,
@@ -323,6 +349,14 @@ class __$$MediaItemImplCopyWithImpl<$Res>
           ? _value.channelTitle
           : channelTitle // ignore: cast_nullable_to_non_nullable
               as String?,
+      channelAvatarUrl: freezed == channelAvatarUrl
+          ? _value.channelAvatarUrl
+          : channelAvatarUrl // ignore: cast_nullable_to_non_nullable
+              as String?,
+      subscriberCount: freezed == subscriberCount
+          ? _value.subscriberCount
+          : subscriberCount // ignore: cast_nullable_to_non_nullable
+              as int?,
       duration: null == duration
           ? _value.duration
           : duration // ignore: cast_nullable_to_non_nullable
@@ -401,6 +435,8 @@ class _$MediaItemImpl extends _MediaItem {
       required this.author,
       required this.channelId,
       this.channelTitle,
+      this.channelAvatarUrl,
+      this.subscriberCount,
       required this.duration,
       required this.publishedAt,
       this.thumbnailUrl,
@@ -436,6 +472,18 @@ class _$MediaItemImpl extends _MediaItem {
   final String channelId;
   @override
   final String? channelTitle;
+
+  /// The channel's avatar, when the surface that produced this item
+  /// carried one. Feed payloads often do not, so this stays null and
+  /// the card falls back to the channel initial.
+  @override
+  final String? channelAvatarUrl;
+
+  /// The channel's subscriber count. Only the single-video path looks
+  /// this up (the player's channel row shows it); feed items leave it
+  /// null rather than pay for a channel request per card.
+  @override
+  final int? subscriberCount;
 // Timing
   @override
   final Duration duration;
@@ -508,7 +556,7 @@ class _$MediaItemImpl extends _MediaItem {
 
   @override
   String toString() {
-    return 'MediaItem(videoId: $videoId, title: $title, description: $description, author: $author, channelId: $channelId, channelTitle: $channelTitle, duration: $duration, publishedAt: $publishedAt, thumbnailUrl: $thumbnailUrl, formats: $formats, subtitles: $subtitles, chapters: $chapters, sponsorSegments: $sponsorSegments, deArrowData: $deArrowData, percentWatched: $percentWatched, resumePosition: $resumePosition, isLive: $isLive, isUpcoming: $isUpcoming, isShorts: $isShorts, isVerified: $isVerified, viewCount: $viewCount, likeCount: $likeCount)';
+    return 'MediaItem(videoId: $videoId, title: $title, description: $description, author: $author, channelId: $channelId, channelTitle: $channelTitle, channelAvatarUrl: $channelAvatarUrl, subscriberCount: $subscriberCount, duration: $duration, publishedAt: $publishedAt, thumbnailUrl: $thumbnailUrl, formats: $formats, subtitles: $subtitles, chapters: $chapters, sponsorSegments: $sponsorSegments, deArrowData: $deArrowData, percentWatched: $percentWatched, resumePosition: $resumePosition, isLive: $isLive, isUpcoming: $isUpcoming, isShorts: $isShorts, isVerified: $isVerified, viewCount: $viewCount, likeCount: $likeCount)';
   }
 
   @override
@@ -525,6 +573,10 @@ class _$MediaItemImpl extends _MediaItem {
                 other.channelId == channelId) &&
             (identical(other.channelTitle, channelTitle) ||
                 other.channelTitle == channelTitle) &&
+            (identical(other.channelAvatarUrl, channelAvatarUrl) ||
+                other.channelAvatarUrl == channelAvatarUrl) &&
+            (identical(other.subscriberCount, subscriberCount) ||
+                other.subscriberCount == subscriberCount) &&
             (identical(other.duration, duration) ||
                 other.duration == duration) &&
             (identical(other.publishedAt, publishedAt) ||
@@ -565,6 +617,8 @@ class _$MediaItemImpl extends _MediaItem {
         author,
         channelId,
         channelTitle,
+        channelAvatarUrl,
+        subscriberCount,
         duration,
         publishedAt,
         thumbnailUrl,
@@ -600,6 +654,8 @@ abstract class _MediaItem extends MediaItem {
       required final String author,
       required final String channelId,
       final String? channelTitle,
+      final String? channelAvatarUrl,
+      final int? subscriberCount,
       required final Duration duration,
       required final DateTime publishedAt,
       final String? thumbnailUrl,
@@ -629,7 +685,19 @@ abstract class _MediaItem extends MediaItem {
   @override
   String get channelId;
   @override
-  String? get channelTitle; // Timing
+  String? get channelTitle;
+
+  /// The channel's avatar, when the surface that produced this item
+  /// carried one. Feed payloads often do not, so this stays null and
+  /// the card falls back to the channel initial.
+  @override
+  String? get channelAvatarUrl;
+
+  /// The channel's subscriber count. Only the single-video path looks
+  /// this up (the player's channel row shows it); feed items leave it
+  /// null rather than pay for a channel request per card.
+  @override
+  int? get subscriberCount; // Timing
   @override
   Duration get duration;
   @override

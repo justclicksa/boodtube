@@ -17,14 +17,14 @@ class CommentsService {
   CommentsService(this._yt);
 
   /// Get comments for a video
-  /// 
+  ///
   /// FIXED: YouTube's getComments requires a Video object (not VideoId)
   /// We need to fetch the Video first.
   Future<List<CommentItem>> getComments(String videoId) async {
     try {
       // 1) Fetch the video first (required by API)
       final video = await _yt.videos.get(videoId);
-      
+
       // 2) Get comments
       final commentsList = await _yt.videos.commentsClient.getComments(video);
       if (commentsList == null) {
@@ -60,17 +60,17 @@ class CommentsService {
   Future<List<CommentItem>> getReplies(String videoId, String commentId) async {
     try {
       final video = await _yt.videos.get(videoId);
-      
+
       // Find the comment
       final commentsList = await _yt.videos.commentsClient.getComments(video);
       if (commentsList == null) return [];
-      
+
       // The API: we need a Comment object to call getReplies
       // For PoC, we'll fetch top-level comments and filter by id
       // (full implementation would track the Comment object)
       // FIXED: getReplies takes Comment, not videoId + commentId
       // This is a simplified version
-      
+
       return []; // PoC: not implemented
     } catch (e) {
       return [];
@@ -81,7 +81,7 @@ class CommentsService {
   DateTime _parsePublishedTime(String time) {
     final now = DateTime.now();
     final lower = time.toLowerCase();
-    
+
     if (lower.contains('minute')) {
       final match = RegExp(r'(\d+)').firstMatch(lower);
       if (match != null) {
@@ -115,7 +115,7 @@ class CommentsService {
     } else if (lower.contains('second')) {
       return now.subtract(const Duration(seconds: 30));
     }
-    
+
     return now;
   }
 }

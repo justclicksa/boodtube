@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'SmartTube'**
+  /// **'BoodTube'**
   String get appTitle;
 
   /// No description provided for @homeTab.
@@ -1424,6 +1424,12 @@ abstract class AppLocalizations {
   /// **'No playlists yet'**
   String get noPlaylists;
 
+  /// No description provided for @channelHasNoPlaylists.
+  ///
+  /// In en, this message translates to:
+  /// **'This channel hasn\'t published any playlists'**
+  String get channelHasNoPlaylists;
+
   /// No description provided for @channelIdLabel.
   ///
   /// In en, this message translates to:
@@ -1453,6 +1459,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Code copied'**
   String get codeCopied;
+
+  /// No description provided for @signInUnofficialWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'This app is not an official YouTube client. Google may restrict or suspend accounts used with unofficial clients. Consider using a secondary account.'**
+  String get signInUnofficialWarning;
+
+  /// No description provided for @signInStepOpenPage.
+  ///
+  /// In en, this message translates to:
+  /// **'1. Open this page on any device'**
+  String get signInStepOpenPage;
+
+  /// No description provided for @signInStepEnterCode.
+  ///
+  /// In en, this message translates to:
+  /// **'2. Enter this code'**
+  String get signInStepEnterCode;
+
+  /// No description provided for @signedInKeystoreNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The session refreshes automatically. Your token is stored in the device keystore and never leaves this phone.'**
+  String get signedInKeystoreNote;
 
   /// No description provided for @videos.
   ///
@@ -1513,6 +1543,336 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Skip {category}'**
   String skipCategory(String category);
+
+  /// No description provided for @searchFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get searchFilters;
+
+  /// No description provided for @searchFilterUploadDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload date'**
+  String get searchFilterUploadDate;
+
+  /// No description provided for @searchFilterType.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get searchFilterType;
+
+  /// No description provided for @searchFilterDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get searchFilterDuration;
+
+  /// No description provided for @searchFilterSortBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by'**
+  String get searchFilterSortBy;
+
+  /// No description provided for @searchFilterAny.
+  ///
+  /// In en, this message translates to:
+  /// **'Any'**
+  String get searchFilterAny;
+
+  /// No description provided for @uploadDateLastHour.
+  ///
+  /// In en, this message translates to:
+  /// **'Last hour'**
+  String get uploadDateLastHour;
+
+  /// No description provided for @uploadDateToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get uploadDateToday;
+
+  /// No description provided for @uploadDateThisWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'This week'**
+  String get uploadDateThisWeek;
+
+  /// No description provided for @uploadDateThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get uploadDateThisMonth;
+
+  /// No description provided for @uploadDateThisYear.
+  ///
+  /// In en, this message translates to:
+  /// **'This year'**
+  String get uploadDateThisYear;
+
+  /// No description provided for @searchTypeVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get searchTypeVideo;
+
+  /// No description provided for @searchTypeMovie.
+  ///
+  /// In en, this message translates to:
+  /// **'Movie'**
+  String get searchTypeMovie;
+
+  /// No description provided for @searchDurationShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Under 4 minutes'**
+  String get searchDurationShort;
+
+  /// No description provided for @searchDurationMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'4–20 minutes'**
+  String get searchDurationMedium;
+
+  /// No description provided for @searchDurationLong.
+  ///
+  /// In en, this message translates to:
+  /// **'Over 20 minutes'**
+  String get searchDurationLong;
+
+  /// No description provided for @sortByRelevance.
+  ///
+  /// In en, this message translates to:
+  /// **'Relevance'**
+  String get sortByRelevance;
+
+  /// No description provided for @sortByUploadDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload date'**
+  String get sortByUploadDate;
+
+  /// No description provided for @sortByViewCount.
+  ///
+  /// In en, this message translates to:
+  /// **'View count'**
+  String get sortByViewCount;
+
+  /// No description provided for @sortByRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Rating'**
+  String get sortByRating;
+
+  /// No description provided for @resetFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get resetFilters;
+
+  /// No description provided for @clearFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filters'**
+  String get clearFilters;
+
+  /// No description provided for @activeFilterCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 filter} other{{count} filters}}'**
+  String activeFilterCount(int count);
+
+  /// No description provided for @noResultsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Try different keywords, or clear your filters.'**
+  String get noResultsSubtitle;
+
+  /// No description provided for @removeFromHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from history'**
+  String get removeFromHistory;
+
+  /// No description provided for @errorNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Content not found'**
+  String get errorNotFound;
+
+  /// No description provided for @errorUnauthorized.
+  ///
+  /// In en, this message translates to:
+  /// **'You need to sign in to view this'**
+  String get errorUnauthorized;
+
+  /// No description provided for @errorRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many requests — try again in a moment'**
+  String get errorRateLimited;
+
+  /// No description provided for @errorParse.
+  ///
+  /// In en, this message translates to:
+  /// **'YouTube sent something we could not read'**
+  String get errorParse;
+
+  /// No description provided for @errorDatabase.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read local data'**
+  String get errorDatabase;
+
+  /// No description provided for @errorYouTube.
+  ///
+  /// In en, this message translates to:
+  /// **'YouTube could not load this right now'**
+  String get errorYouTube;
+
+  /// No description provided for @offlineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re offline'**
+  String get offlineTitle;
+
+  /// No description provided for @offlineSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for a connection…'**
+  String get offlineSubtitle;
+
+  /// No description provided for @backOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'Back online'**
+  String get backOnline;
+
+  /// No description provided for @systemDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get systemDefault;
+
+  /// No description provided for @searchSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Search settings'**
+  String get searchSettings;
+
+  /// No description provided for @noSettingsMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No settings match \"{query}\"'**
+  String noSettingsMatch(String query);
+
+  /// No description provided for @updateCheckUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic update checks aren\'t available in this build'**
+  String get updateCheckUnavailable;
+
+  /// No description provided for @shortsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No Shorts available right now'**
+  String get shortsEmpty;
+
+  /// No description provided for @shortsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load Shorts'**
+  String get shortsLoadFailed;
+
+  /// No description provided for @shortsDislike.
+  ///
+  /// In en, this message translates to:
+  /// **'Dislike'**
+  String get shortsDislike;
+
+  /// No description provided for @shortsOpenChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Open channel'**
+  String get shortsOpenChannel;
+
+  /// No description provided for @play.
+  ///
+  /// In en, this message translates to:
+  /// **'Play'**
+  String get play;
+
+  /// No description provided for @pause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get pause;
+
+  /// No description provided for @close.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get close;
+
+  /// No description provided for @fullscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Fullscreen'**
+  String get fullscreen;
+
+  /// No description provided for @exitFullscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit fullscreen'**
+  String get exitFullscreen;
+
+  /// No description provided for @videoOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'More options'**
+  String get videoOptions;
+
+  /// No description provided for @notInterested.
+  ///
+  /// In en, this message translates to:
+  /// **'Not interested'**
+  String get notInterested;
+
+  /// No description provided for @blockChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t recommend this channel'**
+  String get blockChannel;
+
+  /// No description provided for @goToChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to channel'**
+  String get goToChannel;
+
+  /// No description provided for @miniPlayerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Now playing: {title}'**
+  String miniPlayerLabel(String title);
+
+  /// No description provided for @seekSeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 second} other{{count} seconds}}'**
+  String seekSeconds(int count);
+
+  /// No description provided for @viewReplies.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{View 1 reply} other{View {count} replies}}'**
+  String viewReplies(int count);
+
+  /// No description provided for @continueWatching.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue watching'**
+  String get continueWatching;
 }
 
 class _AppLocalizationsDelegate

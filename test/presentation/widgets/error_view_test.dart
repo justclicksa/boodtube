@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:smarttube_poc/core/errors/exceptions.dart';
 import 'package:smarttube_poc/l10n/app_localizations.dart';
 
 import 'package:smarttube_poc/presentation/widgets/error_view.dart';
@@ -30,14 +31,15 @@ void main() {
       expect(find.text('Try again'), findsOneWidget);
     });
 
-    testWidgets('shows network error message for network errors', (tester) async {
+    testWidgets('shows network error message for NetworkException',
+        (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: ErrorView(
-              error: 'NetworkException: No internet',
+              error: const NetworkException('SocketException: failed host'),
               onRetry: () {},
             ),
           ),
@@ -47,14 +49,15 @@ void main() {
       expect(find.text('No internet connection'), findsOneWidget);
     });
 
-    testWidgets('shows not found message for not found errors', (tester) async {
+    testWidgets('shows not found message for NotFoundException',
+        (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: ErrorView(
-              error: 'NotFoundException: Content not found',
+              error: const NotFoundException('video vq6 is gone'),
               onRetry: () {},
             ),
           ),

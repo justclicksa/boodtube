@@ -98,8 +98,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<int> deleteHistoryItem(String videoId) {
-    return (delete(watchHistoryTable)
-          ..where((t) => t.videoId.equals(videoId)))
+    return (delete(watchHistoryTable)..where((t) => t.videoId.equals(videoId)))
         .go();
   }
 
@@ -168,7 +167,8 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<int> removeFromFavorites(String videoId) {
-    return (delete(favoritesTable)..where((t) => t.videoId.equals(videoId))).go();
+    return (delete(favoritesTable)..where((t) => t.videoId.equals(videoId)))
+        .go();
   }
 
   // ============================================================
@@ -192,7 +192,8 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<int> removeFromWatchLater(String videoId) {
-    return (delete(watchLaterTable)..where((t) => t.videoId.equals(videoId))).go();
+    return (delete(watchLaterTable)..where((t) => t.videoId.equals(videoId)))
+        .go();
   }
 
   // ============================================================
@@ -200,9 +201,36 @@ class AppDatabase extends _$AppDatabase {
   // ============================================================
 
   Future<PlayPositionsTableData?> getPlayPosition(String videoId) {
-    return (select(playPositionsTable)
-          ..where((t) => t.videoId.equals(videoId)))
+    return (select(playPositionsTable)..where((t) => t.videoId.equals(videoId)))
         .getSingleOrNull();
+  }
+
+  /// Saved positions for a whole feed in one statement.
+  ///
+  /// A feed card needs this for every item it shows; asking per item
+  /// would be one round trip per card.
+  Future<Map<String, Duration>> getPlayPositions(
+    Iterable<String> videoIds,
+  ) async {
+    final ids = videoIds.toSet().toList();
+    if (ids.isEmpty) return const {};
+
+    final rows = <PlayPositionsTableData>[];
+    // SQLite caps the number of bound variables per statement, so long
+    // feeds are asked for in chunks rather than one enormous IN (...).
+    const chunkSize = 400;
+    for (var start = 0; start < ids.length; start += chunkSize) {
+      final chunk = ids.skip(start).take(chunkSize).toList();
+      rows.addAll(
+        await (select(playPositionsTable)..where((t) => t.videoId.isIn(chunk)))
+            .get(),
+      );
+    }
+
+    return {
+      for (final row in rows)
+        row.videoId: Duration(milliseconds: row.positionMs),
+    };
   }
 
   Future<int> savePlayPosition(String videoId, Duration position) {

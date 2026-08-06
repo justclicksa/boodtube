@@ -8,7 +8,8 @@ import 'package:smarttube_poc/domain/entities/media_item.dart' as domain;
 import 'package:smarttube_poc/domain/entities/media_format.dart' as domain;
 import 'package:smarttube_poc/domain/entities/media_subtitle.dart';
 import 'package:smarttube_poc/domain/entities/chapter_item.dart';
-import 'package:smarttube_poc/domain/entities/sponsor_segment.dart' show SponsorCategory, SponsorSegment;
+import 'package:smarttube_poc/domain/entities/sponsor_segment.dart'
+    show SponsorCategory, SponsorSegment;
 import 'package:smarttube_poc/domain/repositories/media_item_repository.dart';
 import 'package:smarttube_poc/core/utils/result.dart';
 import 'package:smarttube_poc/core/errors/exceptions.dart';
@@ -27,43 +28,49 @@ class MediaItemRepositoryImpl implements MediaItemRepository {
     StreamResolver? streamResolver,
     SponsorBlockService? sponsorBlockService,
   ])  : _streamResolver = streamResolver,
-        _sponsorBlockService = sponsorBlockService ?? SponsorBlockService.create();
+        _sponsorBlockService =
+            sponsorBlockService ?? SponsorBlockService.create();
 
   @override
   Future<Result<domain.MediaItem>> getMediaItem(String videoId) async {
     try {
-      // 1) Get basic video info
-      var mediaItem = await _client.getVideo(videoId);
+      // Only this one has to finish before the others can start: the
+      // channel lookup needs `channelId`, and nothing else is known yet.
+      final mediaItem = await _client.getVideo(videoId);
 
-      // 2) Get streams ONCE (FIXED: previously called twice).
-      // A live broadcast has none — the manifest parser throws on it —
-      // and the player switches to HLS for those, so a failure here
-      // must not sink the whole load.
-      var streams = <domain.MediaFormat>[];
-      try {
-        streams = await _client.getStreams(videoId);
-      } catch (e) {
-        if (!mediaItem.isLive) rethrow;
-      }
+      // The stream manifest is deliberately NOT fetched here.
+      //
+      // It used to be, to fill `MediaItem.formats` — a field nothing
+      // reads. Its only consumer was the `GetVideoStreamUrl` usecase,
+      // which no screen ever called. Playback resolves its own manifest
+      // through StreamResolver, so this was the single most expensive
+      // call in the app (7–8.5s measured) paying for a result that was
+      // thrown away, and on a live broadcast it was 8s spent on a parse
+      // that is *expected* to fail.
+      //
+      // Everything below is decoration: subtitles, the channel's avatar
+      // and subscriber count, sponsor segments. None of it gates
+      // playback, so all three run concurrently instead of end to end.
+      final subtitlesFuture = _client
+          .getSubtitles(videoId)
+          // Subtitles are optional. Letting this throw used to fail the
+          // entire video load over a caption track.
+          .catchError((_) => <MediaSubtitle>[]);
+      final channelFuture = _channelDetails(mediaItem);
+      final sponsorFuture = getSponsorSegments(videoId);
 
-      // 3) Get subtitles
-      final subtitles = await _client.getSubtitles(videoId);
+      final subtitles = await subtitlesFuture;
+      final channel = await channelFuture;
+      final sponsorSegments =
+          (await sponsorFuture).dataOrNull ?? <SponsorSegment>[];
 
-      // 4) Get sponsor segments (parallel with above)
-      final sponsorResult = await getSponsorSegments(videoId);
-      final sponsorSegments = sponsorResult.dataOrNull ?? <SponsorSegment>[];
-
-      // 5) Get play position from local DB (will be set elsewhere)
-
-      // 5) Get play position from local DB (will be set elsewhere)
-      // For now, we don't have access to local DB here. Return base item.
-      // 6) Combine everything (FIXED: streams are already MediaFormatEntity)
       return Success(
         mediaItem.copyWith(
-          formats: streams,
           subtitles: subtitles,
           chapters: mediaItem.chapters,
           sponsorSegments: sponsorSegments,
+          channelAvatarUrl: channel.$1 ?? mediaItem.channelAvatarUrl,
+          subscriberCount: channel.$2 ?? mediaItem.subscriberCount,
         ),
       );
     } on AppException catch (e) {
@@ -74,6 +81,24 @@ class MediaItemRepositoryImpl implements MediaItemRepository {
         type: FailureType.unknown,
         cause: e,
       );
+    }
+  }
+
+  /// The channel's avatar and subscriber count, or nulls.
+  ///
+  /// youtube_explode reads `subscribersCount` out of
+  /// `c4TabbedHeaderRenderer`, a renderer YouTube retired in favour of
+  /// `pageHeaderRenderer`, so the field is null for every channel today.
+  /// `getChannelInfo` reads the current header instead. Best effort — a
+  /// video is perfectly watchable without either.
+  Future<(String?, int?)> _channelDetails(domain.MediaItem item) async {
+    if (item.channelId.isEmpty) return (null, null);
+    try {
+      final channel = await _client.getChannelInfo(item.channelId);
+      return (channel.avatarUrl, channel.subscriberCount);
+    } catch (_) {
+      // Leave both null rather than guess at a URL.
+      return (null, null);
     }
   }
 

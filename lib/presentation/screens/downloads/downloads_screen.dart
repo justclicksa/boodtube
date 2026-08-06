@@ -10,7 +10,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/utils/duration_formatter.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../providers/downloads_providers.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/empty_view.dart';
+import '../../widgets/error_view.dart';
+import '../../widgets/loading_view.dart';
 
 class DownloadsScreen extends ConsumerWidget {
   const DownloadsScreen({super.key});
@@ -18,6 +21,10 @@ class DownloadsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    // "Delete" and "Cancel" already ship translated with the framework,
+    // so the row actions get tooltips without a new app string.
+    final material = MaterialLocalizations.of(context);
     final saved = ref.watch(savedDownloadsProvider);
     final active = ref.watch(activeDownloadsProvider).value ?? const {};
     final inFlight = active.values
@@ -39,19 +46,29 @@ class DownloadsScreen extends ConsumerWidget {
             children: [
               for (final progress in inFlight)
                 ListTile(
+                  minTileHeight: AppSpacing.minTapTarget,
                   leading: const SizedBox(
-                    width: 48,
+                    width: AppSpacing.minTapTarget,
                     child: Icon(Icons.downloading),
                   ),
                   title: Text(progress.title, maxLines: 1),
                   subtitle: progress.status == DownloadStatus.failed
                       ? Text(
                           progress.error ?? l10n.errorUnknown,
-                          style: const TextStyle(color: Colors.redAccent),
+                          style: TextStyle(color: theme.colorScheme.error),
                           maxLines: 1,
                         )
-                      : LinearProgressIndicator(value: progress.progress),
+                      : LinearProgressIndicator(
+                          value: progress.progress,
+                          // Otherwise the bar is silent to a screen
+                          // reader and the row reads as a bare title.
+                          semanticsLabel: l10n.downloads,
+                          semanticsValue: l10n.percentValue(
+                            (progress.progress * 100).round(),
+                          ),
+                        ),
                   trailing: IconButton(
+                    tooltip: material.cancelButtonLabel,
                     icon: const Icon(Icons.close),
                     onPressed: () => ref
                         .read(downloadsControllerProvider.notifier)
@@ -62,16 +79,19 @@ class DownloadsScreen extends ConsumerWidget {
                 const Divider(height: 1),
               for (final row in rows)
                 ListTile(
+                  minTileHeight: AppSpacing.minTapTarget,
                   onTap: () => context.push('/player/${row.videoId}?offline=1'),
-                  leading: SizedBox(
-                    width: 96,
-                    height: 54,
-                    child: row.thumbnailUrl == null
-                        ? const ColoredBox(color: Colors.black26)
-                        : CachedNetworkImage(
-                            imageUrl: row.thumbnailUrl!,
-                            fit: BoxFit.cover,
-                          ),
+                  leading: ExcludeSemantics(
+                    child: SizedBox(
+                      width: 96,
+                      height: 54,
+                      child: row.thumbnailUrl == null
+                          ? ColoredBox(color: theme.yt.chipBackground)
+                          : CachedNetworkImage(
+                              imageUrl: row.thumbnailUrl!,
+                              fit: BoxFit.cover,
+                            ),
+                    ),
                   ),
                   title: Text(row.title, maxLines: 2),
                   subtitle: Text(
@@ -86,6 +106,7 @@ class DownloadsScreen extends ConsumerWidget {
                     maxLines: 1,
                   ),
                   trailing: IconButton(
+                    tooltip: material.deleteButtonTooltip,
                     icon: const Icon(Icons.delete_outline),
                     onPressed: () => ref
                         .read(downloadsControllerProvider.notifier)
@@ -95,8 +116,13 @@ class DownloadsScreen extends ConsumerWidget {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
+        loading: () => const SkeletonList(style: SkeletonStyle.compactRow),
+        // Was `Center(child: Text('$e'))` — a raw exception with no way
+        // out. ErrorView picks a localized sentence and offers a retry.
+        error: (e, _) => ErrorView(
+          error: e,
+          onRetry: () => ref.invalidate(savedDownloadsProvider),
+        ),
       ),
     );
   }

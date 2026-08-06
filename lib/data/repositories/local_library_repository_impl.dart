@@ -36,7 +36,8 @@ class LocalLibraryRepositoryImpl implements domain.LocalLibraryRepository {
     }
   }
 
-  Future<Result<void>> addToHistory(MediaItem item, {Duration? position}) async {
+  Future<Result<void>> addToHistory(MediaItem item,
+      {Duration? position}) async {
     try {
       // FIXED: append new row (delete existing first) so re-watches are recorded
       await _db.deleteHistoryItem(item.videoId);
@@ -270,9 +271,8 @@ class LocalLibraryRepositoryImpl implements domain.LocalLibraryRepository {
   Future<Result<Duration?>> getPlayPosition(String videoId) async {
     try {
       final record = await _db.getPlayPosition(videoId);
-      return Success(record != null
-          ? Duration(milliseconds: record.positionMs)
-          : null);
+      return Success(
+          record != null ? Duration(milliseconds: record.positionMs) : null);
     } catch (e) {
       return FailureResult(
         'Failed to get position: $e',
@@ -282,7 +282,22 @@ class LocalLibraryRepositoryImpl implements domain.LocalLibraryRepository {
     }
   }
 
-  Future<Result<void>> savePlayPosition(String videoId, Duration position) async {
+  Future<Result<Map<String, Duration>>> getPlayPositions(
+    Iterable<String> videoIds,
+  ) async {
+    try {
+      return Success(await _db.getPlayPositions(videoIds));
+    } catch (e) {
+      return FailureResult(
+        'Failed to get positions: $e',
+        type: FailureType.database,
+        cause: e,
+      );
+    }
+  }
+
+  Future<Result<void>> savePlayPosition(
+      String videoId, Duration position) async {
     try {
       await _db.savePlayPosition(videoId, position);
       return const Success(null);
@@ -350,7 +365,8 @@ class LocalLibraryRepositoryImpl implements domain.LocalLibraryRepository {
     );
   }
 
-  LocalSubscription _subscriptionFromRecord(LocalSubscriptionsTableData record) {
+  LocalSubscription _subscriptionFromRecord(
+      LocalSubscriptionsTableData record) {
     return LocalSubscription(
       channelId: record.channelId,
       title: record.title,

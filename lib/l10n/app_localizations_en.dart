@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'SmartTube';
+  String get appTitle => 'BoodTube';
 
   @override
   String get homeTab => 'Home';
@@ -756,6 +756,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noPlaylists => 'No playlists yet';
 
   @override
+  String get channelHasNoPlaylists =>
+      'This channel hasn\'t published any playlists';
+
+  @override
   String get channelIdLabel => 'Channel ID';
 
   @override
@@ -769,6 +773,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get codeCopied => 'Code copied';
+
+  @override
+  String get signInUnofficialWarning =>
+      'This app is not an official YouTube client. Google may restrict or suspend accounts used with unofficial clients. Consider using a secondary account.';
+
+  @override
+  String get signInStepOpenPage => '1. Open this page on any device';
+
+  @override
+  String get signInStepEnterCode => '2. Enter this code';
+
+  @override
+  String get signedInKeystoreNote =>
+      'The session refreshes automatically. Your token is stored in the device keystore and never leaves this phone.';
 
   @override
   String get videos => 'Videos';
@@ -814,4 +832,199 @@ class AppLocalizationsEn extends AppLocalizations {
   String skipCategory(String category) {
     return 'Skip $category';
   }
+
+  @override
+  String get searchFilters => 'Filters';
+
+  @override
+  String get searchFilterUploadDate => 'Upload date';
+
+  @override
+  String get searchFilterType => 'Type';
+
+  @override
+  String get searchFilterDuration => 'Duration';
+
+  @override
+  String get searchFilterSortBy => 'Sort by';
+
+  @override
+  String get searchFilterAny => 'Any';
+
+  @override
+  String get uploadDateLastHour => 'Last hour';
+
+  @override
+  String get uploadDateToday => 'Today';
+
+  @override
+  String get uploadDateThisWeek => 'This week';
+
+  @override
+  String get uploadDateThisMonth => 'This month';
+
+  @override
+  String get uploadDateThisYear => 'This year';
+
+  @override
+  String get searchTypeVideo => 'Video';
+
+  @override
+  String get searchTypeMovie => 'Movie';
+
+  @override
+  String get searchDurationShort => 'Under 4 minutes';
+
+  @override
+  String get searchDurationMedium => '4–20 minutes';
+
+  @override
+  String get searchDurationLong => 'Over 20 minutes';
+
+  @override
+  String get sortByRelevance => 'Relevance';
+
+  @override
+  String get sortByUploadDate => 'Upload date';
+
+  @override
+  String get sortByViewCount => 'View count';
+
+  @override
+  String get sortByRating => 'Rating';
+
+  @override
+  String get resetFilters => 'Reset';
+
+  @override
+  String get clearFilters => 'Clear filters';
+
+  @override
+  String activeFilterCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count filters',
+      one: '1 filter',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get noResultsSubtitle =>
+      'Try different keywords, or clear your filters.';
+
+  @override
+  String get removeFromHistory => 'Remove from history';
+
+  @override
+  String get errorNotFound => 'Content not found';
+
+  @override
+  String get errorUnauthorized => 'You need to sign in to view this';
+
+  @override
+  String get errorRateLimited => 'Too many requests — try again in a moment';
+
+  @override
+  String get errorParse => 'YouTube sent something we could not read';
+
+  @override
+  String get errorDatabase => 'Could not read local data';
+
+  @override
+  String get errorYouTube => 'YouTube could not load this right now';
+
+  @override
+  String get offlineTitle => 'You\'re offline';
+
+  @override
+  String get offlineSubtitle => 'Waiting for a connection…';
+
+  @override
+  String get backOnline => 'Back online';
+
+  @override
+  String get systemDefault => 'System default';
+
+  @override
+  String get searchSettings => 'Search settings';
+
+  @override
+  String noSettingsMatch(String query) {
+    return 'No settings match \"$query\"';
+  }
+
+  @override
+  String get updateCheckUnavailable =>
+      'Automatic update checks aren\'t available in this build';
+
+  @override
+  String get shortsEmpty => 'No Shorts available right now';
+
+  @override
+  String get shortsLoadFailed => 'Couldn\'t load Shorts';
+
+  @override
+  String get shortsDislike => 'Dislike';
+
+  @override
+  String get shortsOpenChannel => 'Open channel';
+
+  @override
+  String get play => 'Play';
+
+  @override
+  String get pause => 'Pause';
+
+  @override
+  String get close => 'Close';
+
+  @override
+  String get fullscreen => 'Fullscreen';
+
+  @override
+  String get exitFullscreen => 'Exit fullscreen';
+
+  @override
+  String get videoOptions => 'More options';
+
+  @override
+  String get notInterested => 'Not interested';
+
+  @override
+  String get blockChannel => 'Don\'t recommend this channel';
+
+  @override
+  String get goToChannel => 'Go to channel';
+
+  @override
+  String miniPlayerLabel(String title) {
+    return 'Now playing: $title';
+  }
+
+  @override
+  String seekSeconds(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count seconds',
+      one: '1 second',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String viewReplies(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'View $count replies',
+      one: 'View 1 reply',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get continueWatching => 'Continue watching';
 }

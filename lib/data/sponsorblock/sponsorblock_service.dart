@@ -43,8 +43,7 @@ class SponsorBlockService {
         '$_baseUrl/api/skipSegments',
         queryParameters: {
           'videoID': videoId,
-          'categories': jsonEncode(
-              [for (final c in categories) c.apiValue]),
+          'categories': jsonEncode([for (final c in categories) c.apiValue]),
         },
       );
 
@@ -53,25 +52,28 @@ class SponsorBlockService {
       final data = response.data;
       if (data is! List || data.isEmpty) return [];
 
-      return data.map<SponsorSegment>((json) {
-        final segment = json['segment'] as List<dynamic>?;
-        return SponsorSegment(
-          start: Duration(
-            milliseconds: segment != null && segment.isNotEmpty
-                ? ((segment[0] as num) * 1000).toInt()
-                : 0,
-          ),
-          end: Duration(
-            milliseconds: segment != null && segment.length > 1
-                ? ((segment[1] as num) * 1000).toInt()
-                : 0,
-          ),
-          category: SponsorCategoryX.fromApiValue(
-            json['category'] as String? ?? 'sponsor',
-          ),
-          uuid: json['UUID'] as String?,
-        );
-      }).where((s) => s.isNotEmpty).toList();
+      return data
+          .map<SponsorSegment>((json) {
+            final segment = json['segment'] as List<dynamic>?;
+            return SponsorSegment(
+              start: Duration(
+                milliseconds: segment != null && segment.isNotEmpty
+                    ? ((segment[0] as num) * 1000).toInt()
+                    : 0,
+              ),
+              end: Duration(
+                milliseconds: segment != null && segment.length > 1
+                    ? ((segment[1] as num) * 1000).toInt()
+                    : 0,
+              ),
+              category: SponsorCategoryX.fromApiValue(
+                json['category'] as String? ?? 'sponsor',
+              ),
+              uuid: json['UUID'] as String?,
+            );
+          })
+          .where((s) => s.isNotEmpty)
+          .toList();
     } catch (e) {
       // Fail silently — sponsorblock is optional
       return [];

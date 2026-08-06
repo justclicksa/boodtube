@@ -28,6 +28,16 @@ class MediaItem with _$MediaItem {
     required String channelId,
     String? channelTitle,
 
+    /// The channel's avatar, when the surface that produced this item
+    /// carried one. Feed payloads often do not, so this stays null and
+    /// the card falls back to the channel initial.
+    String? channelAvatarUrl,
+
+    /// The channel's subscriber count. Only the single-video path looks
+    /// this up (the player's channel row shows it); feed items leave it
+    /// null rather than pay for a channel request per card.
+    int? subscriberCount,
+
     // Timing
     required Duration duration,
     required DateTime publishedAt,
@@ -70,7 +80,8 @@ class MediaItem with _$MediaItem {
   String get id => videoId;
 
   /// Is this a video the user hasn't finished yet?
-  bool get isInProgress => percentWatched != null && percentWatched! > 0 && percentWatched! < 100;
+  bool get isInProgress =>
+      percentWatched != null && percentWatched! > 0 && percentWatched! < 100;
 
   /// Best quality format available
   MediaFormat? get bestFormat {

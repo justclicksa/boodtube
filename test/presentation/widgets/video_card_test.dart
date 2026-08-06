@@ -3,9 +3,12 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:smarttube_poc/l10n/app_localizations.dart';
+import 'package:smarttube_poc/presentation/providers/settings_providers.dart';
 
 import 'package:smarttube_poc/domain/entities/media_item.dart';
 import 'package:smarttube_poc/domain/entities/media_format.dart';
@@ -191,5 +194,115 @@ void main() {
       // Horizontal cards should have wider aspect ratio
       expect(find.text('Test Video'), findsOneWidget);
     });
+
+    testWidgets('overflow button opens the menu instead of playing',
+        (tester) async {
+      // The button used to fall through to onTap, so pressing the three
+      // dots played the video. This is the guard against that returning.
+      final item = _createTestItem();
+      var tapped = false;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(_FakePrefs()),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: SizedBox(
+                width: 360,
+                height: 360,
+                child: VideoCard(item: item, onTap: () => tapped = true),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+
+      expect(tapped, isFalse);
+      expect(find.byIcon(Icons.not_interested), findsOneWidget);
+      expect(find.byIcon(Icons.block), findsOneWidget);
+    });
+
+    testWidgets('overflow button honours an explicit onMore', (tester) async {
+      final item = _createTestItem();
+      var moreTapped = false;
+      var tapped = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 360,
+              child: VideoCard(
+                item: item,
+                onTap: () => tapped = true,
+                onMore: () => moreTapped = true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pump();
+
+      expect(moreTapped, isTrue);
+      expect(tapped, isFalse);
+    });
+
+    testWidgets('overflow button meets the 48pt minimum touch target',
+        (tester) async {
+      final item = _createTestItem();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 360,
+              child: VideoCard(item: item, onMore: () {}),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final size = tester.getSize(
+        find.ancestor(
+          of: find.byIcon(Icons.more_vert),
+          matching: find.byType(IconButton),
+        ),
+      );
+      expect(size.width, greaterThanOrEqualTo(48));
+      expect(size.height, greaterThanOrEqualTo(48));
+    });
   });
+}
+
+/// SharedPreferences stand-in for the menu's settings dependency.
+class _FakePrefs implements SharedPreferences {
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    if (invocation.memberName == #getStringList) return <String>[];
+    if (invocation.memberName == #getString) return null;
+    if (invocation.memberName == #getBool) return null;
+    if (invocation.memberName == #getInt) return null;
+    if (invocation.memberName == #getDouble) return null;
+    if (invocation.memberName == #containsKey) return false;
+    if (invocation.memberName == #getKeys) return <String>{};
+    return Future<bool>.value(true);
+  }
 }

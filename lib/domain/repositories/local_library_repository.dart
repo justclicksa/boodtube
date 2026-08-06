@@ -53,5 +53,12 @@ abstract interface class LocalLibraryRepository {
 
   // Play positions
   Future<Result<Duration?>> getPlayPosition(String videoId);
+
+  /// Saved positions for many videos at once, keyed by video id. Used to
+  /// draw the resume bar on a whole feed with a single query.
+  Future<Result<Map<String, Duration>>> getPlayPositions(
+    Iterable<String> videoIds,
+  );
+
   Future<Result<void>> savePlayPosition(String videoId, Duration position);
 }

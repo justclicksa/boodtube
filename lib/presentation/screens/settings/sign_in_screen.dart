@@ -5,10 +5,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../l10n/app_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../providers/auth_providers.dart';
+import '../../theme/app_theme.dart';
 
 class SignInScreen extends ConsumerWidget {
   const SignInScreen({super.key});
@@ -21,7 +22,7 @@ class SignInScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: Text(AppLocalizations.of(context).signIn)),
       body: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.xl),
         child: switch (state) {
           SignedIn(:final expiresAt) => _SignedInView(
               expiresAt: expiresAt,
@@ -49,39 +50,43 @@ class _SignedOutView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Icon(Icons.account_circle_outlined, size: 72),
-        const SizedBox(height: 16),
+        Icon(
+          Icons.account_circle_outlined,
+          size: 72,
+          semanticLabel: l10n.signIn,
+        ),
+        const SizedBox(height: AppSpacing.lg),
         Text(
-          'Sign in with your Google account',
+          l10n.signIn,
           textAlign: TextAlign.center,
           style: theme.textTheme.titleMedium,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sm),
         Text(
-          'Signing in enables your real subscriptions, playlists and watch '
-          'history instead of the local-only ones.',
+          l10n.signInSubtitle,
           textAlign: TextAlign.center,
           style: theme.textTheme.bodySmall,
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpacing.xl),
         Card(
           color: theme.colorScheme.errorContainer,
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpacing.md),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.warning_amber_rounded,
-                    color: theme.colorScheme.onErrorContainer),
-                const SizedBox(width: 10),
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: theme.colorScheme.onErrorContainer,
+                ),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Text(
-                    'This app is not an official YouTube client. Google may '
-                    'restrict or suspend accounts used with unofficial '
-                    'clients. Consider using a secondary account.',
+                    l10n.signInUnofficialWarning,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onErrorContainer,
                     ),
@@ -92,17 +97,17 @@ class _SignedOutView extends StatelessWidget {
           ),
         ),
         if (error != null) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           Text(
             error!,
             textAlign: TextAlign.center,
             style: TextStyle(color: theme.colorScheme.error),
           ),
         ],
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.xl),
         FilledButton(
           onPressed: onStart,
-          child: Text(AppLocalizations.of(context).getSignInCode),
+          child: Text(l10n.getSignInCode),
         ),
       ],
     );
@@ -117,12 +122,16 @@ class _CodeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final material = MaterialLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('1. Open this page on any device',
-            style: theme.textTheme.titleSmall),
-        const SizedBox(height: 8),
+        Text(
+          l10n.signInStepOpenPage,
+          style: theme.textTheme.titleSmall,
+        ),
+        const SizedBox(height: AppSpacing.sm),
         OutlinedButton.icon(
           icon: const Icon(Icons.open_in_new),
           label: Text(code.verificationUrl),
@@ -131,35 +140,49 @@ class _CodeView extends StatelessWidget {
             mode: LaunchMode.externalApplication,
           ),
         ),
-        const SizedBox(height: 24),
-        Text('2. Enter this code', style: theme.textTheme.titleSmall),
-        const SizedBox(height: 8),
-        InkWell(
-          onTap: () async {
-            await Clipboard.setData(ClipboardData(text: code.userCode));
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(AppLocalizations.of(context).codeCopied)),
-              );
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            decoration: BoxDecoration(
-              border: Border.all(color: theme.dividerColor),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              code.userCode,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                letterSpacing: 6,
-                fontWeight: FontWeight.bold,
+        const SizedBox(height: AppSpacing.xl),
+        Text(l10n.signInStepEnterCode, style: theme.textTheme.titleSmall),
+        const SizedBox(height: AppSpacing.sm),
+        // The code box is the copy button; say so rather than leaving a
+        // screen reader to guess why a heading is tappable. "Copy" ships
+        // translated with the framework.
+        Semantics(
+          label: '${code.userCode}, ${material.copyButtonLabel}',
+          button: true,
+          excludeSemantics: true,
+          child: Tooltip(
+            message: material.copyButtonLabel,
+            child: InkWell(
+              onTap: () async {
+                await Clipboard.setData(ClipboardData(text: code.userCode));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(l10n.codeCopied)),
+                  );
+                }
+              },
+              child: Container(
+                constraints: const BoxConstraints(
+                  minHeight: AppSpacing.minTapTarget,
+                ),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+                decoration: BoxDecoration(
+                  border: Border.all(color: theme.dividerColor),
+                  borderRadius: BorderRadius.circular(AppSpacing.md),
+                ),
+                child: Text(
+                  code.userCode,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    letterSpacing: 6,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.xl),
         Row(
           children: [
             const SizedBox(
@@ -167,14 +190,14 @@ class _CodeView extends StatelessWidget {
               height: 18,
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
-            const SizedBox(width: 12),
-            Text(AppLocalizations.of(context).waitingForApproval),
+            const SizedBox(width: AppSpacing.md),
+            Text(l10n.waitingForApproval),
           ],
         ),
         const Spacer(),
         TextButton(
           onPressed: onCancel,
-          child: Text(AppLocalizations.of(context).cancel),
+          child: Text(l10n.cancel),
         ),
       ],
     );
@@ -189,27 +212,32 @@ class _SignedInView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Icon(Icons.check_circle, size: 72, color: theme.colorScheme.primary),
-        const SizedBox(height: 16),
+        Icon(
+          Icons.check_circle,
+          size: 72,
+          color: theme.colorScheme.primary,
+          semanticLabel: l10n.signedIn,
+        ),
+        const SizedBox(height: AppSpacing.lg),
         Text(
-          'Signed in',
+          l10n.signedIn,
           textAlign: TextAlign.center,
           style: theme.textTheme.titleMedium,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.sm),
         Text(
-          'The session refreshes automatically. Your token is stored in the '
-          'device keystore and never leaves this phone.',
+          l10n.signedInKeystoreNote,
           textAlign: TextAlign.center,
           style: theme.textTheme.bodySmall,
         ),
         const Spacer(),
         OutlinedButton(
           onPressed: onSignOut,
-          child: Text(AppLocalizations.of(context).signOut),
+          child: Text(l10n.signOut),
         ),
       ],
     );

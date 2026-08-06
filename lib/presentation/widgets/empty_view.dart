@@ -5,24 +5,30 @@
 import 'package:flutter/material.dart';
 
 class EmptyView extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final Widget? action;
-
   const EmptyView({
-    super.key,
     required this.icon,
     required this.title,
     this.subtitle,
     this.action,
+    this.secondaryAction,
+    super.key,
   });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+
+  /// Primary way out of the empty state — usually a filled button.
+  final Widget? action;
+
+  /// Optional second, lower-emphasis way out shown beside [action].
+  final Widget? secondaryAction;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32.0),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -41,9 +47,18 @@ class EmptyView extends StatelessWidget {
                 style: TextStyle(color: Colors.grey[600]),
               ),
             ],
-            if (action != null) ...[
+            if (action != null || secondaryAction != null) ...[
               const SizedBox(height: 24),
-              action!,
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (action != null) action!,
+                  if (secondaryAction != null) secondaryAction!,
+                ],
+              ),
             ],
           ],
         ),

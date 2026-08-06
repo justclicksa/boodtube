@@ -17,6 +17,6 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verify app launched (look for AppBar title)
-    expect(find.text('SmartTube'), findsOneWidget);
+    expect(find.text('BoodTube'), findsOneWidget);
   });
 }

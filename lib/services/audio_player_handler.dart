@@ -9,6 +9,8 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 
 import '../domain/entities/media_item.dart' as domain;
@@ -135,7 +137,29 @@ class SmartTubeAudioHandler extends BaseAudioHandler with SeekHandler {
 }
 
 /// Initialises audio_service. Call once from main().
-Future<SmartTubeAudioHandler> setupAudioService(Player player) {
+Future<SmartTubeAudioHandler> setupAudioService(Player player) async {
+  // iOS hands every process the `soloAmbient` category by default, and
+  // that category is torn down the moment the app leaves the foreground.
+  // Nothing else claims one: mpv opens its own audio unit, and
+  // audio_service only publishes the Now Playing entry — which is why
+  // the lock screen filled in correctly while the sound itself stopped
+  // as soon as the app was backgrounded. `music()` is the `playback`
+  // category: it survives backgrounding and ignores the ringer switch.
+  //
+  // Configured before AudioService.init so the session is in place
+  // before anything can start playing. Android reads this too, and it
+  // matches what the handler already declares there.
+  // Guarded: this runs before runApp, so anything that throws or hangs
+  // here shows up as a permanently blank app rather than as degraded
+  // audio. Losing the category costs background playback; losing the
+  // UI costs everything.
+  try {
+    final session = await AudioSession.instance;
+    await session.configure(const AudioSessionConfiguration.music());
+  } catch (e) {
+    debugPrint('audio session configure failed at startup: $e');
+  }
+
   return AudioService.init(
     builder: () => SmartTubeAudioHandler(player),
     config: const AudioServiceConfig(

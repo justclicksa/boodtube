@@ -21,11 +21,60 @@ class DeArrowService {
   final Dio _dio;
 
   static const _api = 'https://sponsor.ajay.app/api/branding';
-  static const _thumbnailApi = 'https://dearrow-thumb.ajay.app/api/v1/getThumbnail';
+  static const _thumbnailApi =
+      'https://dearrow-thumb.ajay.app/api/v1/getThumbnail';
+
+  /// How many branding requests are in flight at once. The API takes one
+  /// video per call, so a feed means one call per item — spread over a
+  /// few connections rather than all at once.
+  static const _concurrency = 6;
+
+  /// Answers already fetched this session, including the negative ones
+  /// (most videos have no branding, and re-asking on every feed refresh
+  /// is the expensive part).
+  final _cache = <String, DeArrowData?>{};
+  static const _maxCacheEntries = 600;
+
+  /// Branding for a whole feed at once, keyed by video id. Videos with
+  /// no community data are simply absent from the map.
+  ///
+  /// Never throws: DeArrow is an optional enhancement, and an outage
+  /// must leave the feed exactly as it would have been without it.
+  Future<Map<String, DeArrowData>> getDeArrowDataBatch(
+    Iterable<String> videoIds,
+  ) async {
+    final result = <String, DeArrowData>{};
+    final pending = <String>[];
+    for (final id in videoIds.toSet()) {
+      if (_cache.containsKey(id)) {
+        final cached = _cache[id];
+        if (cached != null) result[id] = cached;
+      } else {
+        pending.add(id);
+      }
+    }
+
+    for (var start = 0; start < pending.length; start += _concurrency) {
+      final chunk = pending.skip(start).take(_concurrency);
+      final answers = await Future.wait(chunk.map(getDeArrowData));
+      for (final (index, data) in answers.indexed) {
+        if (data != null) result[chunk.elementAt(index)] = data;
+      }
+    }
+    return result;
+  }
+
+  void _remember(String videoId, DeArrowData? data) {
+    if (_cache.length >= _maxCacheEntries) {
+      _cache.remove(_cache.keys.first);
+    }
+    _cache[videoId] = data;
+  }
 
   /// Returns community branding for [videoId], or null when there is
   /// none (the common case) or the request fails.
   Future<DeArrowData?> getDeArrowData(String videoId) async {
+    if (_cache.containsKey(videoId)) return _cache[videoId];
     try {
       final response = await _dio.get<Map<String, dynamic>>(
         _api,
@@ -35,19 +84,31 @@ class DeArrowService {
           validateStatus: (status) => status != null && status < 500,
         ),
       );
-      if (response.statusCode != 200 || response.data == null) return null;
+      if (response.statusCode != 200 || response.data == null) {
+        // A 404 is the API's "no branding for this video"; cache it so
+        // the whole feed is not re-asked on every refresh.
+        if (response.statusCode == 404) _remember(videoId, null);
+        return null;
+      }
 
       final title = _bestTitle(response.data!['titles']);
       final thumbnailTime = _bestThumbnailTime(response.data!['thumbnails']);
-      if (title == null && thumbnailTime == null) return null;
+      if (title == null && thumbnailTime == null) {
+        _remember(videoId, null);
+        return null;
+      }
 
-      return DeArrowData(
+      final data = DeArrowData(
         title: title,
         thumbnailUrl: thumbnailTime == null
             ? null
             : '$_thumbnailApi?videoID=$videoId&time=$thumbnailTime',
       );
+      _remember(videoId, data);
+      return data;
     } catch (e) {
+      // Not cached: a network failure says nothing about whether this
+      // video has branding.
       debugPrint('DeArrow failed for $videoId: $e');
       return null;
     }

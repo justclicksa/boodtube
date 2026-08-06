@@ -12,6 +12,7 @@ import 'package:go_router/go_router.dart';
 import '../../../domain/entities/media_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../providers/local_library_providers.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/empty_view.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/loading_view.dart';
@@ -77,7 +78,7 @@ class _LibraryList extends StatelessWidget {
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
@@ -107,7 +108,7 @@ class _HistoryTab extends ConsumerWidget {
             emptyTitle: l10n.noHistory,
             emptySubtitle: l10n.emptyHistorySubtitle,
           ),
-          loading: () => const LoadingView(),
+          loading: () => const SkeletonList(style: SkeletonStyle.compactRow),
           error: (e, st) => ErrorView(
             error: e,
             onRetry: () => ref.invalidate(watchHistoryProvider),
@@ -129,7 +130,7 @@ class _FavoritesTab extends ConsumerWidget {
             emptyTitle: l10n.noFavorites,
             emptySubtitle: l10n.emptyFavoritesSubtitle,
           ),
-          loading: () => const LoadingView(),
+          loading: () => const SkeletonList(style: SkeletonStyle.compactRow),
           error: (e, st) => ErrorView(
             error: e,
             onRetry: () => ref.invalidate(favoritesProvider),
@@ -151,7 +152,7 @@ class _WatchLaterTab extends ConsumerWidget {
             emptyTitle: l10n.noWatchLater,
             emptySubtitle: l10n.emptyWatchLaterSubtitle,
           ),
-          loading: () => const LoadingView(),
+          loading: () => const SkeletonList(style: SkeletonStyle.compactRow),
           error: (e, st) => ErrorView(
             error: e,
             onRetry: () => ref.invalidate(watchLaterProvider),

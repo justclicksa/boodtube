@@ -43,6 +43,9 @@ dependencies:
   # Background audio
   audio_service: ^0.18.0
   just_audio: ^0.9.0
+  # Already present transitively; declared so main() can claim the iOS
+  # `playback` category, without which iOS suspends audio on background.
+  audio_session: ^0.1.25
 
   # UI utilities
   cached_network_image: ^3.4.0
@@ -60,6 +63,8 @@ dependencies:
   rxdart: ^0.28.0
   url_launcher: ^6.3.0
   path_provider: ^2.1.0
+  share_plus: ^10.0.0
+  connectivity_plus: ^6.0.0
 
   # Background updates
   package_info_plus: ^8.0.0
@@ -88,6 +93,23 @@ dev_dependencies:
   # Pinned so analyzer_plugin/custom_lint_visitor resolve to a mutually
   # compatible set (drift_dev 2.28 breaks against analyzer >=7.4)
   analyzer: 7.3.0
+
+# A local copy of youtube_explode_dart 3.1.0 carrying one fix, marked
+# `BOODTUBE PATCH` in third_party/.../pages/search_page.dart.
+#
+# Upstream calls the `getT` extension method on `dynamic` receivers in
+# three places in the search parser. Extension methods are resolved
+# statically, so on `dynamic` they throw NoSuchMethodError at runtime.
+# The affected branches are the ones only live broadcasts and channels
+# reach, and the throw escapes `searchContent`'s `.map(...).toList()` —
+# so one live result turned an entire search into zero results.
+#
+# 3.1.0 is the latest release and still has it. Re-apply the patch if
+# this is ever bumped; diff against the pub.dev copy of the same version
+# to see exactly what changed.
+dependency_overrides:
+  youtube_explode_dart:
+    path: third_party/youtube_explode_dart
 
 flutter:
   uses-material-design: true

@@ -4,17 +4,21 @@
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:audio_session/audio_session.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 
 import '../../data/youtube/stream_resolver.dart';
+import '../../core/errors/exceptions.dart';
 import '../../domain/entities/media_item.dart';
 import '../../domain/entities/media_subtitle.dart';
 import '../../domain/entities/sponsor_segment.dart';
+import '../../domain/repositories/local_library_repository.dart';
 import '../../services/audio_player_handler.dart';
 import '../../services/history_sync.dart';
 import 'auth_providers.dart';
+import 'content_providers.dart' show cachedMediaItem;
 import 'repository_providers.dart';
 import 'settings_providers.dart';
 
@@ -71,7 +75,7 @@ class PlayerStateData {
   final bool isBuffering;
   final double playbackSpeed;
   final bool isLoading;
-  final String? error;
+  final Object? error;
   final String? currentVideoUrl;
   final String? currentAudioUrl;
   final String? currentQualityLabel;
@@ -107,7 +111,7 @@ class PlayerStateData {
     bool? isBuffering,
     double? playbackSpeed,
     bool? isLoading,
-    String? error,
+    Object? error,
     String? currentVideoUrl,
     String? currentAudioUrl,
     String? currentQualityLabel,
@@ -166,9 +170,17 @@ class PlayerStateData {
   }
 }
 
-class PlayerController extends StateNotifier<PlayerStateData> {
+class PlayerController extends StateNotifier<PlayerStateData>
+    with WidgetsBindingObserver {
   PlayerController(this._ref) : super(const PlayerStateData()) {
     _player = _ref.read(mediaPlayerProvider);
+    WidgetsBinding.instance.addObserver(this);
+    // Resolved here, not on demand: dispose() runs while the
+    // ProviderContainer is already being torn down, so a _ref.read()
+    // from there throws "provider ... already disposed" and the
+    // exit-time position save was silently lost.
+    _libraryRepo = _ref.read(localLibraryRepositoryProvider);
+    _historySync = _ref.read(historySyncProvider);
 
     // Surface mpv logs/errors — mpv does not write to logcat by itself,
     // so without these listeners playback failures are invisible.
@@ -205,13 +217,21 @@ class PlayerController extends StateNotifier<PlayerStateData> {
         state = playing
             ? state.copyWith(isPlaying: true, clearError: true)
             : state.copyWith(isPlaying: false);
+        if (playing) unawaited(_claimAudioSession());
       }))
       ..add(_player.stream.completed.listen(_onCompleted));
   }
 
   final Ref _ref;
   late final Player _player;
+  late final LocalLibraryRepository _libraryRepo;
+  late final HistorySync _historySync;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
+
+  /// Whether the video track was dropped because the app went to the
+  /// background, so it is only restored if we were the ones who took it.
+  bool _videoSuspended = false;
+
   Timer? _savePositionTimer;
   Timer? _sleepTimer;
 
@@ -225,6 +245,12 @@ class PlayerController extends StateNotifier<PlayerStateData> {
     'force-seekable',
     'cannot reuse http connection',
     'failed to create file cache',
+    // No audio output is a degraded playback, not a failed one — the
+    // video keeps decoding. Treating it as fatal replaced the whole
+    // player with an error screen. libmpv's simulator slices are built
+    // with every audio output disabled (`-Daudiounit=disabled`), so on
+    // the simulator this fires on every single video.
+    'could not open/initialize audio device',
     'ffurl_read returned',
     'invalid nal unit size',
     'missing picture in access unit',
@@ -295,19 +321,45 @@ class PlayerController extends StateNotifier<PlayerStateData> {
   /// Loads a video: metadata, streams, then hands the URLs to mpv through
   /// the local proxy.
   Future<void> loadVideo(String videoId) async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    // Re-opening the player for the video already loaded — coming back
+    // from the mini player — must not tear down a running stream and
+    // re-fetch metadata for it. mpv is already sitting on the right
+    // position. A failed load is still retried: the retry button and
+    // the error path both leave `error` set.
+    if (state.currentItem?.videoId == videoId &&
+        state.currentVideoUrl != null &&
+        state.error == null) {
+      return;
+    }
+
+    // Draw the page from what the tapped card already knew — title,
+    // thumbnail, channel, duration — so only the video is waited on
+    // rather than the whole screen. Replaced by the full item below.
+    final seed = cachedMediaItem(videoId);
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      currentItem: seed ?? state.currentItem,
+    );
     _cpn = HistorySync.newCpn();
+    // Caps are recorded per video; a new one starts with a clean slate.
+    _cappedHeights.clear();
 
     try {
       final sw = Stopwatch()..start();
       debugPrint('loadVideo[$videoId]: fetching metadata...');
       final repo = _ref.read(mediaItemRepositoryProvider);
       final result =
-          await repo.getMediaItem(videoId).timeout(const Duration(seconds: 45));
+          await repo.getMediaItem(videoId).timeout(const Duration(seconds: 25));
 
+      // Carry the cause, not a sentence about it. Stringifying here left
+      // the watch page with nothing to classify, so every failure —
+      // offline, rate limited, video pulled — surfaced as the same
+      // "something went wrong".
       final item = result.when(
         success: (item) => item,
-        failure: (message, type, cause) => throw Exception(message),
+        failure: (message, type, cause) =>
+            throw Failure(message, type: type, cause: cause),
       );
       debugPrint('loadVideo: metadata done in ${sw.elapsedMilliseconds}ms');
 
@@ -397,6 +449,13 @@ class PlayerController extends StateNotifier<PlayerStateData> {
     // something the user can read.
     proxy.onUpstreamRefused = (served, total) {
       if (served >= total) return;
+      // A cap is quality-specific, not video-specific: probing the video
+      // that raised this (tool/client_probe.dart) showed googlevideo
+      // serving 720p in full while refusing 1080p a few MiB in. So drop
+      // a rung and keep playing rather than stopping on an error screen
+      // — dying at the top quality when a lower one would have played
+      // is the worst of the options.
+      if (_stepDownAfterCap()) return;
       state = state.copyWith(
         error: 'stream-capped',
         isLoading: false,
@@ -447,6 +506,39 @@ class PlayerController extends StateNotifier<PlayerStateData> {
   /// playback position, speed and play/pause state. Metadata is reused —
   /// only the stream URLs change — so this is a couple of seconds rather
   /// than a full reload.
+  /// Heights already refused for the video being played, so a downgrade
+  /// never walks back into one.
+  final Set<int> _cappedHeights = {};
+
+  /// Re-opens one quality rung down after googlevideo cut a stream off.
+  /// Returns false when there is nothing lower left to fall back to.
+  bool _stepDownAfterCap() {
+    if (_switchingQuality) return true; // a downgrade is already running
+    final heights = state.availableHeights;
+    if (heights.isEmpty) return false;
+
+    final current = _currentHeight();
+    if (current != null) _cappedHeights.add(current);
+
+    final next = heights
+        .where((h) =>
+            (current == null || h < current) && !_cappedHeights.contains(h))
+        .firstOrNull;
+    if (next == null) return false;
+
+    debugPrint(
+        'stream capped at ${current ?? "?"}p, stepping down to ${next}p');
+    unawaited(switchQuality(next));
+    return true;
+  }
+
+  /// The resolution currently playing, read back from its label.
+  int? _currentHeight() {
+    final label = state.currentQualityLabel;
+    if (label == null) return null;
+    return int.tryParse(RegExp(r'(\d+)').firstMatch(label)?.group(1) ?? '');
+  }
+
   Future<void> switchQuality(int height) async {
     final item = state.currentItem;
     if (item == null || _switchingQuality) return;
@@ -490,24 +582,31 @@ class PlayerController extends StateNotifier<PlayerStateData> {
   }
 
   Future<void> _saveCurrentPosition() async {
+    // Everything this needs is read up front. dispose() starts this
+    // without awaiting it, so by the time the first write returns the
+    // notifier is already disposed and touching `state` again throws
+    // "Tried to use PlayerController after dispose was called" — which
+    // aborted the save half-done, before the account ever heard about it.
     final item = state.currentItem;
+    final position = state.position;
+    final duration = state.duration;
+
     // A live broadcast has no position worth remembering — "where you
     // left off" is always "now".
     if (item == null || item.isLive) return;
-    final libraryRepo = _ref.read(localLibraryRepositoryProvider);
-    await libraryRepo.savePlayPosition(item.videoId, state.position);
-    await libraryRepo.addToHistory(item, position: state.position);
+    await _libraryRepo.savePlayPosition(item.videoId, position);
+    await _libraryRepo.addToHistory(item, position: position);
 
     // Report to the account too, so the same video resumes here on the
     // phone, on the web and in the official apps.
     final cpn = _cpn;
     if (cpn != null) {
-      await _ref.read(historySyncProvider).push(
-            videoId: item.videoId,
-            position: state.position,
-            duration: state.duration,
-            cpn: cpn,
-          );
+      await _historySync.push(
+        videoId: item.videoId,
+        position: position,
+        duration: duration,
+        cpn: cpn,
+      );
     }
   }
 
@@ -674,8 +773,60 @@ class PlayerController extends StateNotifier<PlayerStateData> {
     state = const PlayerStateData();
   }
 
+  /// iOS suspends the whole process on background unless it holds an
+  /// *active* `playback` session. Configuring the category is only half
+  /// of it — without `setActive(true)` the system does not count us as
+  /// playing, which is why playback stopped dead on background and came
+  /// back paused rather than continuing.
+  ///
+  /// Re-asserted on every play instead of once at startup because mpv
+  /// opens its own audio unit when playback begins and can leave the
+  /// category somewhere else.
+  Future<void> _claimAudioSession() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
+      // setActive returns false when the system refuses the session,
+      // which is otherwise silent and indistinguishable from success.
+      if (!await session.setActive(true)) {
+        debugPrint('audiosession: system refused to activate');
+      }
+    } catch (e) {
+      debugPrint('audio session claim failed: $e');
+    }
+  }
+
+  /// iOS reclaims the VideoToolbox decode session the moment the app
+  /// leaves the foreground. mpv does not find out — it keeps feeding the
+  /// dead session and every frame fails with
+  /// `kVTInvalidSessionErr (-12903)`, which is what audio-only playback
+  /// in the background actually looked like on the device.
+  ///
+  /// Dropping the video track on the way out is also what we want
+  /// regardless: nobody is watching, and decoding costs battery. Audio
+  /// keeps the clock running, so the position never stalls.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (state.currentItem == null) return;
+    switch (lifecycleState) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        if (_videoSuspended) return;
+        _videoSuspended = true;
+        unawaited(_player.setVideoTrack(VideoTrack.no()));
+      case AppLifecycleState.resumed:
+        if (!_videoSuspended) return;
+        _videoSuspended = false;
+        unawaited(_player.setVideoTrack(VideoTrack.auto()));
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        break;
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _savePositionTimer?.cancel();
     _sleepTimer?.cancel();
     _saveCurrentPosition();

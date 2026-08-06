@@ -18,6 +18,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../providers/content_providers.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/empty_view.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/loading_view.dart';
 import '../../widgets/video_card.dart';
@@ -106,15 +108,21 @@ class BrowseScreen extends ConsumerWidget {
         child: feed.when(
           data: (items) {
             if (items.isEmpty) {
+              // Still a scrollable, so pull-to-refresh keeps working on
+              // the one screen most likely to need it.
               return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 children: [
-                  const SizedBox(height: 120),
-                  Center(child: Text(l10n.nothingToShow)),
+                  const SizedBox(height: AppSpacing.xxl * 2),
+                  EmptyView(
+                    icon: category.icon,
+                    title: l10n.nothingToShow,
+                  ),
                 ],
               );
             }
             return ListView.builder(
-              padding: const EdgeInsets.only(bottom: 24),
+              padding: const EdgeInsets.only(bottom: AppSpacing.xl),
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final item = items[index];
@@ -125,7 +133,7 @@ class BrowseScreen extends ConsumerWidget {
               },
             );
           },
-          loading: () => const LoadingView(),
+          loading: () => const SkeletonList(style: SkeletonStyle.feed),
           error: (error, _) => ErrorView(error: error, onRetry: refresh),
         ),
       ),

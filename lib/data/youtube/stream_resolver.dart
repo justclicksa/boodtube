@@ -131,7 +131,8 @@ class StreamResolver {
 
       // FIXED: get URL directly from VideoStreamInfo (it's a public getter)
       final height = videoStream.videoResolution.height as int? ??
-          int.tryParse(videoStream.qualityLabel.replaceAll('p', '').split('p').first);
+          int.tryParse(
+              videoStream.qualityLabel.replaceAll('p', '').split('p').first);
 
       return ResolvedStream(
         videoUrl: videoStream.url.toString(),
@@ -247,8 +248,7 @@ class StreamResolver {
   /// FIXED: returns the actual best audio stream, not sort().first (which was void)
   AudioStreamInfo? _selectAudio(List<AudioStreamInfo> streams) {
     if (streams.isEmpty) return null;
-    final sorted = [...streams]
-      ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+    final sorted = [...streams]..sort((a, b) => b.bitrate.compareTo(a.bitrate));
     return sorted.first; // sorted.first is valid - returns first element
   }
 }

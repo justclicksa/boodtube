@@ -7,13 +7,20 @@
 
 import 'dart:async';
 
+// Narrowed: the package also re-exports flutter_cache_manager's
+// DownloadProgress, which collides with this app's own class of that
+// name in services/download_manager.dart.
+import 'package:cached_network_image/cached_network_image.dart'
+    show CachedNetworkImageProvider;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:screen_brightness/screen_brightness.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/utils/duration_formatter.dart';
 import '../../../domain/entities/chapter_item.dart';
@@ -27,9 +34,11 @@ import '../../providers/downloads_providers.dart';
 import '../../providers/local_library_providers.dart';
 import '../../providers/player_providers.dart';
 import '../../providers/repository_providers.dart';
+import '../../routing/app_router.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/video_card.dart';
+import '../comments/comments_screen.dart';
 import 'widgets/player_settings_sheet.dart';
 
 /// How mpv gets frames onto the screen, per platform.
@@ -50,7 +59,8 @@ VideoControllerConfiguration get _videoOutputConfiguration =>
           vo: 'mediacodec_embed',
           hwdec: 'mediacodec',
         ),
-      TargetPlatform.iOS || TargetPlatform.macOS =>
+      TargetPlatform.iOS ||
+      TargetPlatform.macOS =>
         const VideoControllerConfiguration(hwdec: 'videotoolbox'),
       _ => const VideoControllerConfiguration(),
     };
@@ -60,6 +70,7 @@ class PlayerScreen extends ConsumerStatefulWidget {
     super.key,
     required this.videoId,
     this.offline = false,
+    this.heroTag,
   });
 
   final String videoId;
@@ -67,11 +78,17 @@ class PlayerScreen extends ConsumerStatefulWidget {
   /// Play the downloaded copy instead of streaming.
   final bool offline;
 
+  /// Tag of the thumbnail this player was opened from, so the image
+  /// carries through instead of the card vanishing and a new surface
+  /// appearing. Null when the caller has no matching Hero.
+  final String? heroTag;
+
   @override
   ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+class _PlayerScreenState extends ConsumerState<PlayerScreen>
+    with SingleTickerProviderStateMixin {
   late final VideoController _videoController;
   bool _showControls = true;
   Timer? _hideTimer;
@@ -82,6 +99,24 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   IconData? _gestureIcon;
   double _brightness = 0.5;
 
+  /// How far the sheet has been dragged toward the mini player, in
+  /// logical pixels. Zero is fully expanded.
+  double _dragOffset = 0;
+
+  /// Runs 0→1 to spring an abandoned drag back to zero. It stays a unit
+  /// controller and the pixel distance is interpolated from
+  /// [_settleFrom]; an AnimationController clamps to its bounds, so
+  /// feeding it raw pixels would pin every release at one.
+  late final AnimationController _settle;
+  double _settleFrom = 0;
+
+  /// Riverpod's container, captured while the element is still mounted
+  /// so dispose can hand the route flag back without touching context.
+  late final ProviderContainer _container;
+
+  /// Distance past which releasing collapses instead of springing back.
+  static const double _collapseThreshold = 110;
+
   @override
   void initState() {
     super.initState();
@@ -89,6 +124,23 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       ref.read(mediaPlayerProvider),
       configuration: _videoOutputConfiguration,
     );
+
+    _settle = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    )..addListener(() {
+        if (mounted) {
+          setState(() => _dragOffset = _settleFrom * (1 - _settle.value));
+        }
+      });
+
+    // The mini player describes the same playback and shares Hero tags
+    // with this screen, so it stands down while this route is mounted.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(playerRouteActiveProvider.notifier).state = true;
+      }
+    });
 
     PiPManager.install(
       onModeChanged: (active) {
@@ -109,8 +161,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _container = ProviderScope.containerOf(context, listen: false);
+  }
+
+  @override
   void dispose() {
     _hideTimer?.cancel();
+    _settle.dispose();
+    // Writing to a provider during a dependent's dispose is not allowed,
+    // so hand the flag back on the next frame, through the container
+    // captured while this element was still mounted.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _container.read(playerRouteActiveProvider.notifier).state = false;
+    });
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -118,7 +183,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   void _restartHideTimer() {
     _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(seconds: 4), () {
+    _hideTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) setState(() => _showControls = false);
     });
   }
@@ -128,21 +193,58 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     if (_showControls) _restartHideTimer();
   }
 
+  // ============================================================
+  // Collapse-to-mini drag
+  // ============================================================
+
+  void _onCollapseDragUpdate(double delta) {
+    _settle.stop();
+    setState(() => _dragOffset = (_dragOffset + delta).clamp(0.0, 10000.0));
+  }
+
+  void _onCollapseDragEnd(double velocity) {
+    if (_dragOffset > _collapseThreshold || velocity > 700) {
+      HapticFeedback.lightImpact();
+      context.pop();
+      return;
+    }
+    // Spring back to fully expanded.
+    _settleFrom = _dragOffset;
+    _settle.forward(from: 0);
+  }
+
   Future<void> _toggleFullscreen() async {
     final controller = ref.read(playerControllerProvider.notifier);
     final next = !ref.read(playerControllerProvider).isFullscreen;
+    HapticFeedback.selectionClick();
     controller.setFullscreen(next);
     if (next) {
       await SystemChrome.setPreferredOrientations([
         DeviceOrientation.landscapeLeft,
         DeviceOrientation.landscapeRight,
       ]);
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      // Not immersiveSticky: that mode installs a system reveal gesture
+      // and swallows the first touch to show the bars again, which is
+      // exactly why one tap did nothing in fullscreen and only the
+      // second reached the controls. Hiding the overlays outright leaves
+      // every touch to the player.
+      await SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: const [],
+      );
     } else {
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      // Portrait stays pinned while the watch page is showing.
+      //
+      // Handing rotation straight back was the bug: if the phone is
+      // physically sideways — which it is, you turned it to watch — iOS
+      // rotates right back to landscape the moment it is allowed to,
+      // and the exit looked like nothing happened. Fullscreen is
+      // gesture- and button-driven now, so nothing needs the device's
+      // orientation and nothing has to be unlocked.
       await SystemChrome.setPreferredOrientations([
         DeviceOrientation.portraitUp,
       ]);
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
   }
 
@@ -216,7 +318,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     final state = ref.watch(playerControllerProvider);
     final isFullscreen = state.isFullscreen;
 
-    final player = _PlayerSurface(
+    // One tree for every mode: the Video element must keep its identity
+    // or its native surface is torn down and re-created, which leaves a
+    // black window when entering PiP or fullscreen.
+    final expanded = isFullscreen || state.isPiPActive;
+
+    Widget player = _PlayerSurface(
       state: state,
       videoController: _videoController,
       showControls: _showControls,
@@ -235,14 +342,31 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       },
       onBrightnessDelta: _adjustBrightness,
       onVolumeDelta: _adjustVolume,
+      // Portrait belongs to the collapse gesture — it is the one every
+      // YouTube user reaches for first. Brightness and volume take over
+      // the vertical drag only in fullscreen, where nothing can collapse.
+      collapsible: !expanded,
+      onCollapseDragUpdate: _onCollapseDragUpdate,
+      onCollapseDragEnd: _onCollapseDragEnd,
     );
 
-    // One tree for every mode: the Video element must keep its identity
-    // or its native surface is torn down and re-created, which leaves a
-    // black window when entering PiP or fullscreen.
-    final expanded = isFullscreen || state.isPiPActive;
+    final heroTag = widget.heroTag;
+    if (heroTag != null && !expanded) {
+      player = Hero(
+        tag: heroTag,
+        // The card's still thumbnail and this live surface are different
+        // widgets; cross-fading them beats scaling one into the other.
+        flightShuttleBuilder: (_, animation, __, ___, toHero) =>
+            FadeTransition(opacity: animation, child: toHero.widget),
+        child: player,
+      );
+    }
 
-    return Scaffold(
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final collapseProgress =
+        (_dragOffset / (screenHeight * 0.45)).clamp(0.0, 1.0);
+
+    final scaffold = Scaffold(
       backgroundColor:
           expanded ? Colors.black : Theme.of(context).scaffoldBackgroundColor,
       body: PopScope(
@@ -250,9 +374,14 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         onPopInvokedWithResult: (didPop, _) {
           if (!didPop) _toggleFullscreen();
         },
+        // Fullscreen means edge to edge on every side. Leaving left and
+        // right on — SafeArea's default — inset the video by the notch
+        // in landscape, which is what made it sit short of the screen.
         child: SafeArea(
           top: !expanded,
           bottom: !expanded,
+          left: !expanded,
+          right: !expanded,
           child: Column(
             children: [
               if (expanded)
@@ -262,27 +391,57 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                   ),
                 )
               else
-                AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: Stack(
-                    children: [player, _gestureHud()],
+                // Loose so the video gives way rather than overflowing
+                // if this layout ever renders in a viewport too short
+                // for a full 16:9 — mid-rotation, or a split view.
+                Flexible(
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Stack(
+                      children: [player, _gestureHud()],
+                    ),
                   ),
                 ),
               if (!expanded)
                 Expanded(
                   child: state.currentItem == null
                       ? const SizedBox.shrink()
-                      : _WatchDetails(
-                          item: state.currentItem!,
-                          descriptionExpanded: _descriptionExpanded,
-                          onToggleDescription: () => setState(
-                            () => _descriptionExpanded = !_descriptionExpanded,
+                      // The page below the video fades out as the sheet
+                      // is dragged down, so what lands on the bar is the
+                      // video alone.
+                      : Opacity(
+                          opacity: 1 - collapseProgress,
+                          child: _WatchDetails(
+                            item: state.currentItem!,
+                            descriptionExpanded: _descriptionExpanded,
+                            onToggleDescription: () => setState(
+                              () =>
+                                  _descriptionExpanded = !_descriptionExpanded,
+                            ),
                           ),
                         ),
                 ),
             ],
           ),
         ),
+      ),
+    );
+
+    // Shrinking toward the top keeps the video under the finger while
+    // the page narrows toward the mini player's footprint.
+    //
+    // These wrappers are unconditional even at rest. Introducing them
+    // only once the drag starts changes the shape of the tree, which
+    // remounts everything below — including the GestureDetector whose
+    // drag is in flight. The recognizer is then disposed mid-gesture and
+    // neither onVerticalDragEnd nor onVerticalDragCancel ever fires, so
+    // the player sticks halfway down with no way back.
+    return Transform.translate(
+      offset: Offset(0, _dragOffset),
+      child: Transform.scale(
+        scale: 1 - collapseProgress * 0.22,
+        alignment: Alignment.topCenter,
+        child: scaffold,
       ),
     );
   }
@@ -292,7 +451,16 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 // Video surface + overlay
 // ============================================================
 
-class _PlayerSurface extends ConsumerWidget {
+/// What the finger currently on the player surface is doing.
+enum _VerticalDrag {
+  none,
+  collapseOrExpand,
+  leaveFullscreen,
+  brightness,
+  volume,
+}
+
+class _PlayerSurface extends ConsumerStatefulWidget {
   const _PlayerSurface({
     required this.state,
     required this.videoController,
@@ -305,6 +473,9 @@ class _PlayerSurface extends ConsumerWidget {
     required this.onVolumeDelta,
     required this.onGestureStart,
     required this.onGestureEnd,
+    required this.collapsible,
+    required this.onCollapseDragUpdate,
+    required this.onCollapseDragEnd,
   });
 
   final PlayerStateData state;
@@ -319,7 +490,35 @@ class _PlayerSurface extends ConsumerWidget {
   final VoidCallback onGestureStart;
   final VoidCallback onGestureEnd;
 
-  BoxFit get _fit => switch (state.videoFit) {
+  /// Whether a downward drag collapses the player toward the mini bar.
+  /// False in fullscreen, where the vertical drag means brightness and
+  /// volume instead.
+  final bool collapsible;
+  final ValueChanged<double> onCollapseDragUpdate;
+  final ValueChanged<double> onCollapseDragEnd;
+
+  @override
+  ConsumerState<_PlayerSurface> createState() => _PlayerSurfaceState();
+}
+
+class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
+  /// Which half the seek ripple is showing on, and how much has piled
+  /// up. YouTube counts repeated taps rather than restarting at ten, so
+  /// three quick taps read as thirty seconds.
+  int? _seekSide;
+  int _seekAccumulated = 0;
+  Timer? _seekBadgeTimer;
+
+  /// Speed before a press-and-hold, restored on release.
+  double? _speedBeforeHold;
+
+  @override
+  void dispose() {
+    _seekBadgeTimer?.cancel();
+    super.dispose();
+  }
+
+  BoxFit get _fit => switch (widget.state.videoFit) {
         VideoFit.fit => BoxFit.contain,
         VideoFit.fitWidth => BoxFit.fitWidth,
         VideoFit.fitHeight => BoxFit.fitHeight,
@@ -327,37 +526,156 @@ class _PlayerSurface extends ConsumerWidget {
         VideoFit.zoom => BoxFit.cover,
       };
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void _onDoubleTap(Offset globalPosition) {
     final controller = ref.read(playerControllerProvider.notifier);
+    final width = MediaQuery.sizeOf(context).width;
+    final isBack = globalPosition.dx < width / 2;
+    final side = isBack ? -1 : 1;
+    final step = widget.state.seekInterval.inSeconds;
+
+    if (isBack) {
+      controller.seekBackward();
+    } else {
+      controller.seekForward();
+    }
+    HapticFeedback.lightImpact();
+
+    setState(() {
+      // Switching sides mid-run starts the count over rather than
+      // netting off against the other direction.
+      _seekAccumulated = _seekSide == side ? _seekAccumulated + step : step;
+      _seekSide = side;
+    });
+
+    _seekBadgeTimer?.cancel();
+    _seekBadgeTimer = Timer(const Duration(milliseconds: 800), () {
+      if (mounted) setState(() => _seekSide = null);
+    });
+    widget.onInteract();
+  }
+
+  void _startSpeedHold() {
+    if (_speedBeforeHold != null) return;
+    final controller = ref.read(playerControllerProvider.notifier);
+    _speedBeforeHold = widget.state.playbackSpeed;
+    controller.setSpeed(2);
+    HapticFeedback.mediumImpact();
+    setState(() {});
+  }
+
+  void _endSpeedHold() {
+    final previous = _speedBeforeHold;
+    if (previous == null) return;
+    ref.read(playerControllerProvider.notifier).setSpeed(previous);
+    _speedBeforeHold = null;
+    setState(() {});
+  }
+
+  // ============================================================
+  // Vertical drag
+  // ============================================================
+  //
+  // What a downward drag means depends on where the player already is,
+  // so the meaning is decided once when the finger lands rather than
+  // re-derived on every frame:
+  //
+  //   portrait, down  → collapse toward the mini player
+  //   portrait, up    → go fullscreen
+  //   fullscreen, middle third, down → leave fullscreen
+  //   fullscreen, outer thirds       → brightness (leading) / volume
+  //
+  // The thirds are what keep the last two apart: YouTube reserves the
+  // centre of a fullscreen player for the exit gesture and the sides for
+  // brightness and volume, and doing the same means neither has to
+  // guess at the other's intent from velocity.
+  _VerticalDrag _dragMode = _VerticalDrag.none;
+  double _dragTotal = 0;
+
+  void _beginVerticalDrag(DragStartDetails details) {
+    _dragTotal = 0;
+    if (widget.collapsible) {
+      _dragMode = _VerticalDrag.collapseOrExpand;
+      return;
+    }
+    // The middle sixty percent leaves fullscreen; only the outer edges
+    // adjust brightness and volume. Splitting it evenly in thirds made
+    // the exit — the gesture people actually reach for — the hardest of
+    // the three to hit.
+    final width = MediaQuery.sizeOf(context).width;
+    final x = details.globalPosition.dx;
+    if (x > width * 0.2 && x < width * 0.8) {
+      _dragMode = _VerticalDrag.leaveFullscreen;
+      return;
+    }
+    _dragMode = x < width / 2 ? _VerticalDrag.brightness : _VerticalDrag.volume;
+    widget.onGestureStart();
+  }
+
+  void _updateVerticalDrag(DragUpdateDetails details) {
+    final delta = details.primaryDelta ?? 0;
+    _dragTotal += delta;
+    switch (_dragMode) {
+      case _VerticalDrag.collapseOrExpand:
+        // Only downward moves the sheet; an upward drag is read on
+        // release instead, so it cannot fight the page scrolling below.
+        if (delta > 0 || _dragTotal > 0) widget.onCollapseDragUpdate(delta);
+      case _VerticalDrag.brightness:
+        widget.onBrightnessDelta(-delta / MediaQuery.sizeOf(context).height);
+      case _VerticalDrag.volume:
+        widget.onVolumeDelta(-delta / MediaQuery.sizeOf(context).height);
+      case _VerticalDrag.leaveFullscreen:
+      case _VerticalDrag.none:
+        break;
+    }
+  }
+
+  void _endVerticalDrag(double velocity) {
+    final mode = _dragMode;
+    final total = _dragTotal;
+    _dragMode = _VerticalDrag.none;
+    _dragTotal = 0;
+
+    switch (mode) {
+      case _VerticalDrag.collapseOrExpand:
+        if (total < -60 || velocity < -700) {
+          widget.onCollapseDragEnd(0); // let the sheet settle back first
+          widget.onToggleFullscreen();
+        } else {
+          widget.onCollapseDragEnd(velocity);
+        }
+      case _VerticalDrag.leaveFullscreen:
+        if (total > 60 || velocity > 700) widget.onToggleFullscreen();
+      case _VerticalDrag.brightness:
+      case _VerticalDrag.volume:
+        widget.onGestureEnd();
+      case _VerticalDrag.none:
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
 
     return ColoredBox(
       color: Colors.black,
       child: GestureDetector(
-        onTap: onToggleControls,
-        onDoubleTapDown: (details) {
-          final width = MediaQuery.sizeOf(context).width;
-          if (details.globalPosition.dx < width / 2) {
-            controller.seekBackward();
-          } else {
-            controller.seekForward();
-          }
-          onInteract();
-        },
-        // Vertical drag: brightness on the left half, volume on the
-        // right — the gesture every mobile video app uses.
-        onVerticalDragStart: (_) => onGestureStart(),
-        onVerticalDragUpdate: (details) {
-          final size = MediaQuery.sizeOf(context);
-          // Full height of the surface ≈ a full sweep of the range.
-          final delta = -details.primaryDelta! / size.height;
-          if (details.globalPosition.dx < size.width / 2) {
-            onBrightnessDelta(delta);
-          } else {
-            onVolumeDelta(delta);
-          }
-        },
-        onVerticalDragEnd: (_) => onGestureEnd(),
+        onTap: widget.onToggleControls,
+        onDoubleTapDown: (details) => _onDoubleTap(details.globalPosition),
+        // Press and hold anywhere for double speed, the way YouTube
+        // does; releasing puts the previous rate back.
+        onLongPressStart: (_) => _startSpeedHold(),
+        onLongPressEnd: (_) => _endSpeedHold(),
+        onLongPressCancel: _endSpeedHold,
+        onVerticalDragStart: (details) => _beginVerticalDrag(details),
+        onVerticalDragUpdate: (details) => _updateVerticalDrag(details),
+        onVerticalDragEnd: (details) =>
+            _endVerticalDrag(details.primaryVelocity ?? 0),
+        // A drag that loses the arena — to a scroll underneath, or to
+        // the platform reclaiming the touch — reports cancel and never
+        // end. Without this the player is stranded half-collapsed with
+        // no gesture left to finish it.
+        onVerticalDragCancel: () => _endVerticalDrag(0),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -365,21 +683,33 @@ class _PlayerSurface extends ConsumerWidget {
               ErrorView(
                 // The relay reports a mid-stream cutoff with a sentinel
                 // rather than a message, so it can be translated here.
+                // Sentinels are translated here; anything else is
+                // handed over intact so ErrorView can tell an outage
+                // from a pulled video from a rate limit.
                 error: switch (state.error) {
-                  'stream-capped' =>
-                    AppLocalizations.of(context).streamCapped,
-                  final e when e != null && e.contains('live-unavailable') =>
+                  'stream-capped' => AppLocalizations.of(context).streamCapped,
+                  final String e when e.contains('live-unavailable') =>
                     AppLocalizations.of(context).liveUnavailable,
-                  _ => state.error!,
+                  final e => e!,
                 },
-                onRetry: onRetry,
+                onRetry: widget.onRetry,
               )
             else
               Video(
-                controller: videoController,
+                controller: widget.videoController,
                 controls: null,
                 fit: _fit,
                 fill: Colors.black,
+                // media_kit_video defaults this to true and calls
+                // player.pause() the moment the app backgrounds. That is
+                // the right default for a widget that assumes you are
+                // watching, and it is what silently defeated background
+                // playback here: the process stayed alive and the audio
+                // session stayed active, but mpv had been paused out
+                // from under us. This app wants audio to keep going, and
+                // PlayerController drops the video track on background
+                // itself so nothing decodes off-screen.
+                pauseUponEnteringBackgroundMode: false,
               ),
 
             if (state.isLoading || (state.isBuffering && state.error == null))
@@ -407,22 +737,131 @@ class _PlayerSurface extends ConsumerWidget {
                 ),
               ),
 
-            if (state.showSponsorSkipButton && state.upcomingSegment != null)
-              Positioned(
-                right: 12,
-                bottom: 64,
-                child: _SponsorSkipButton(
-                  segment: state.upcomingSegment!,
-                  onSkip: controller.skipSponsorSegment,
+            // Seek ripple — the half of the screen that was tapped,
+            // carrying the running total.
+            if (_seekSide != null)
+              Align(
+                alignment: _seekSide == -1
+                    ? Alignment.centerLeft
+                    : Alignment.centerRight,
+                child: _SeekBadge(
+                  seconds: _seekAccumulated,
+                  backward: _seekSide == -1,
                 ),
               ),
 
-            if (showControls && state.error == null)
-              _ControlsOverlay(
-                state: state,
-                onInteract: onInteract,
-                onToggleFullscreen: onToggleFullscreen,
+            if (_speedBeforeHold != null)
+              const Align(
+                alignment: Alignment.topCenter,
+                child: Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: _SpeedBadge(),
+                ),
               ),
+
+            if (state.showSponsorSkipButton && state.upcomingSegment != null)
+              PositionedDirectional(
+                end: 12,
+                bottom: 64,
+                child: _SponsorSkipButton(
+                  segment: state.upcomingSegment!,
+                  onSkip: ref
+                      .read(playerControllerProvider.notifier)
+                      .skipSponsorSegment,
+                ),
+              ),
+
+            if (state.error == null)
+              // Fading rather than snapping: the controls appearing and
+              // vanishing between frames is what made every tap feel
+              // like a redraw instead of a response.
+              IgnorePointer(
+                ignoring: !widget.showControls,
+                child: AnimatedOpacity(
+                  opacity: widget.showControls ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  child: _ControlsOverlay(
+                    state: state,
+                    onInteract: widget.onInteract,
+                    onToggleFullscreen: widget.onToggleFullscreen,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The "+30 seconds" bubble YouTube flashes on a double tap.
+class _SeekBadge extends StatelessWidget {
+  const _SeekBadge({required this.seconds, required this.backward});
+
+  final int seconds;
+  final bool backward;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      width: 116,
+      height: 116,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        color: Colors.white24,
+        shape: BoxShape.circle,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            backward ? Icons.fast_rewind : Icons.fast_forward,
+            color: Colors.white,
+            size: 26,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.seekSeconds(seconds),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown while the screen is held down for double speed.
+class _SpeedBadge extends StatelessWidget {
+  const _SpeedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: Colors.black87,
+        borderRadius: BorderRadius.all(Radius.circular(20)),
+      ),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '2×',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            SizedBox(width: 6),
+            Icon(Icons.fast_forward, color: Colors.white, size: 16),
           ],
         ),
       ),
@@ -445,192 +884,254 @@ class _ControlsOverlay extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final controller = ref.read(playerControllerProvider.notifier);
+
+    // Slider and IconButton both require a Material ancestor, and this
+    // overlay cannot rely on the Scaffold's: the player surface is
+    // wrapped in a Hero, and a Hero in flight is lifted into the
+    // Navigator's overlay, outside the Scaffold entirely. Supplying a
+    // transparent Material here keeps the controls valid wherever the
+    // subtree is mounted.
+    return Material(
+      type: MaterialType.transparency,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.black54, Colors.transparent, Colors.black87],
+            stops: [0, 0.45, 1],
+          ),
+        ),
+        child: Column(
+          children: [
+            // Top bar
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.keyboard_arrow_down,
+                      color: Colors.white, size: 28),
+                  onPressed: () {
+                    if (state.isFullscreen) {
+                      onToggleFullscreen();
+                    } else {
+                      context.pop();
+                    }
+                  },
+                ),
+                const Spacer(),
+                // Only where the platform can actually do it. On iOS PiP
+                // needs an AVPlayerLayer the system owns, and mpv renders
+                // into a texture — so the button would never do anything
+                // but show an apology.
+                if (PiPManager.isAvailableOnThisPlatform)
+                  IconButton(
+                    tooltip: l10n.pictureInPicture,
+                    icon: const Icon(Icons.picture_in_picture_alt_outlined,
+                        color: Colors.white),
+                    onPressed: () async {
+                      final ok = await PiPManager.enterPiP();
+                      if (!ok && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(l10n.pipUnavailable)),
+                        );
+                      }
+                    },
+                  ),
+                IconButton(
+                  tooltip: l10n.settingsTab,
+                  icon: const Icon(Icons.settings, color: Colors.white),
+                  onPressed: () {
+                    onInteract();
+                    showPlayerSettings(context);
+                  },
+                ),
+              ],
+            ),
+
+            // Center transport
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _RoundControl(
+                    icon: Icons.replay_10,
+                    onTap: () {
+                      controller.seekBackward();
+                      onInteract();
+                    },
+                  ),
+                  const SizedBox(width: 28),
+                  _RoundControl(
+                    icon: state.isPlaying
+                        ? Icons.pause
+                        : (state.position >= state.duration &&
+                                state.duration > Duration.zero)
+                            ? Icons.replay
+                            : Icons.play_arrow,
+                    size: 44,
+                    onTap: () {
+                      controller.togglePlayPause();
+                      onInteract();
+                    },
+                  ),
+                  const SizedBox(width: 28),
+                  _RoundControl(
+                    icon: Icons.forward_10,
+                    onTap: () {
+                      controller.seekForward();
+                      onInteract();
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            // Current chapter, the way YouTube labels the scrubber.
+            if (_currentChapter(state) != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    _currentChapter(state)!.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+
+            // Bottom bar
+            _ScrubBar(
+              state: state,
+              onInteract: onInteract,
+              onToggleFullscreen: onToggleFullscreen,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Elapsed time, the scrubber and the fullscreen toggle.
+///
+/// Owns the drag itself: the old slider seeked on every drag frame,
+/// which fired dozens of seeks for one sweep and stuttered the whole
+/// way. Here the thumb follows the finger locally and exactly one seek
+/// is issued on release.
+class _ScrubBar extends ConsumerStatefulWidget {
+  const _ScrubBar({
+    required this.state,
+    required this.onInteract,
+    required this.onToggleFullscreen,
+  });
+
+  final PlayerStateData state;
+  final VoidCallback onInteract;
+  final VoidCallback onToggleFullscreen;
+
+  @override
+  ConsumerState<_ScrubBar> createState() => _ScrubBarState();
+}
+
+class _ScrubBarState extends ConsumerState<_ScrubBar> {
+  /// Position under the finger while dragging, in milliseconds. Null
+  /// when not dragging, so playback drives the thumb.
+  double? _scrubMs;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
+    final l10n = AppLocalizations.of(context);
+    final controller = ref.read(playerControllerProvider.notifier);
     final duration = state.duration.inMilliseconds
         .toDouble()
         .clamp(1, double.infinity)
         .toDouble();
+    final value = (_scrubMs ?? state.position.inMilliseconds.toDouble())
+        .clamp(0, duration)
+        .toDouble();
+    final chapters = state.currentItem?.chapters ?? const <ChapterItem>[];
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Colors.black54, Colors.transparent, Colors.black87],
-          stops: [0, 0.45, 1],
-        ),
-      ),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 6),
+      child: Row(
         children: [
-          // Top bar
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.keyboard_arrow_down,
-                    color: Colors.white, size: 28),
-                onPressed: () {
-                  if (state.isFullscreen) {
-                    onToggleFullscreen();
-                  } else {
-                    context.pop();
-                  }
-                },
-              ),
-              const Spacer(),
-              // Only where the platform can actually do it. On iOS PiP
-              // needs an AVPlayerLayer the system owns, and mpv renders
-              // into a texture — so the button would never do anything
-              // but show an apology.
-              if (PiPManager.isAvailableOnThisPlatform)
-                IconButton(
-                  tooltip: l10n.pictureInPicture,
-                  icon: const Icon(Icons.picture_in_picture_alt_outlined,
-                      color: Colors.white),
-                  onPressed: () async {
-                    final ok = await PiPManager.enterPiP();
-                    if (!ok && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(l10n.pipUnavailable)),
-                      );
-                    }
-                  },
-                ),
-              IconButton(
-                tooltip: l10n.settingsTab,
-                icon: const Icon(Icons.settings, color: Colors.white),
-                onPressed: () {
-                  onInteract();
-                  showPlayerSettings(context);
-                },
-              ),
-            ],
+          Text(
+            DurationFormatter.format(Duration(milliseconds: value.toInt())),
+            style: const TextStyle(color: Colors.white, fontSize: 12),
           ),
-
-          // Center transport
           Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                _RoundControl(
-                  icon: Icons.replay_10,
-                  onTap: () {
-                    controller.seekBackward();
-                    onInteract();
-                  },
+                // How much is safe to watch without waiting, and where
+                // the chapters break — both drawn under the thumb.
+                Positioned.fill(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: CustomPaint(
+                      painter: _TrackPainter(
+                        chapters: chapters,
+                        duration: state.duration,
+                        buffered: state.buffered,
+                      ),
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 28),
-                _RoundControl(
-                  icon: state.isPlaying
-                      ? Icons.pause
-                      : (state.position >= state.duration &&
-                              state.duration > Duration.zero)
-                          ? Icons.replay
-                          : Icons.play_arrow,
-                  size: 44,
-                  onTap: () {
-                    controller.togglePlayPause();
-                    onInteract();
-                  },
-                ),
-                const SizedBox(width: 28),
-                _RoundControl(
-                  icon: Icons.forward_10,
-                  onTap: () {
-                    controller.seekForward();
-                    onInteract();
-                  },
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3,
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayShape:
+                        const RoundSliderOverlayShape(overlayRadius: 14),
+                    activeTrackColor: YouTubeColors.red,
+                    // Transparent so the buffered range painted beneath
+                    // shows through instead of being covered by it.
+                    inactiveTrackColor: Colors.transparent,
+                    thumbColor: YouTubeColors.red,
+                  ),
+                  child: Slider(
+                    value: value,
+                    max: duration,
+                    label: DurationFormatter.format(
+                      Duration(milliseconds: value.toInt()),
+                    ),
+                    onChangeStart: (_) {
+                      HapticFeedback.selectionClick();
+                      widget.onInteract();
+                    },
+                    onChanged: (next) {
+                      setState(() => _scrubMs = next);
+                      widget.onInteract();
+                    },
+                    onChangeEnd: (next) {
+                      controller.seek(Duration(milliseconds: next.toInt()));
+                      setState(() => _scrubMs = null);
+                      widget.onInteract();
+                    },
+                  ),
                 ),
               ],
             ),
           ),
-
-          // Current chapter, the way YouTube labels the scrubber.
-          if (_currentChapter(state) != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
-              child: Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: Text(
-                  _currentChapter(state)!.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
+          Text(
+            DurationFormatter.format(state.duration),
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
+          IconButton(
+            tooltip: state.isFullscreen ? l10n.exitFullscreen : l10n.fullscreen,
+            icon: Icon(
+              state.isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+              color: Colors.white,
             ),
-
-          // Bottom bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-            child: Row(
-              children: [
-                Text(
-                  DurationFormatter.format(state.position),
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-                Expanded(
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Chapter boundaries, drawn under the slider.
-                      if (state.currentItem != null &&
-                          state.currentItem!.chapters.isNotEmpty &&
-                          state.duration > Duration.zero)
-                        Positioned.fill(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: CustomPaint(
-                              painter: _ChapterMarkersPainter(
-                                chapters: state.currentItem!.chapters,
-                                duration: state.duration,
-                              ),
-                            ),
-                          ),
-                        ),
-                      SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          trackHeight: 3,
-                          thumbShape:
-                              const RoundSliderThumbShape(enabledThumbRadius: 6),
-                          overlayShape:
-                              const RoundSliderOverlayShape(overlayRadius: 14),
-                          activeTrackColor: YouTubeColors.red,
-                          inactiveTrackColor: Colors.white24,
-                          thumbColor: YouTubeColors.red,
-                        ),
-                        child: Slider(
-                          value: state.position.inMilliseconds
-                              .toDouble()
-                              .clamp(0, duration),
-                          max: duration,
-                          onChanged: (value) {
-                            controller
-                                .seek(Duration(milliseconds: value.toInt()));
-                            onInteract();
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  DurationFormatter.format(state.duration),
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-                IconButton(
-                  icon: Icon(
-                    state.isFullscreen
-                        ? Icons.fullscreen_exit
-                        : Icons.fullscreen,
-                    color: Colors.white,
-                  ),
-                  onPressed: onToggleFullscreen,
-                ),
-              ],
-            ),
+            onPressed: widget.onToggleFullscreen,
           ),
         ],
       ),
@@ -653,43 +1154,72 @@ ChapterItem? _currentChapter(PlayerStateData state) {
   return current;
 }
 
-/// Thin ticks on the progress bar at each chapter boundary.
-class _ChapterMarkersPainter extends CustomPainter {
-  const _ChapterMarkersPainter({
+/// The unplayed track, the buffered stretch on top of it, and a tick at
+/// every chapter boundary.
+///
+/// The buffered range was already being tracked and only ever surfaced
+/// as a number in the stats menu. Drawn here it answers the question a
+/// stalled video actually raises: wait, or drop the quality?
+class _TrackPainter extends CustomPainter {
+  const _TrackPainter({
     required this.chapters,
     required this.duration,
+    required this.buffered,
   });
 
   final List<ChapterItem> chapters;
   final Duration duration;
+  final Duration buffered;
 
   @override
   void paint(Canvas canvas, Size size) {
     final total = duration.inMilliseconds;
     if (total <= 0) return;
-    final paint = Paint()..color = Colors.black87;
-    // Ticks scale with the video: 0.4% of the width, floor 2px.
-    final markWidth = (size.width * 0.004).clamp(2.0, 4.0);
-    final centerY = size.height / 2;
 
+    const trackHeight = 3.0;
+    final centerY = size.height / 2;
+    final top = centerY - trackHeight / 2;
+
+    // Unplayed track.
+    canvas.drawRect(
+      Rect.fromLTWH(0, top, size.width, trackHeight),
+      Paint()..color = Colors.white24,
+    );
+
+    // Buffered ahead of the playhead.
+    final bufferedFraction = (buffered.inMilliseconds / total).clamp(0.0, 1.0);
+    if (bufferedFraction > 0) {
+      canvas.drawRect(
+        Rect.fromLTWH(0, top, size.width * bufferedFraction, trackHeight),
+        Paint()..color = Colors.white54,
+      );
+    }
+
+    // Chapter boundaries. Ticks scale with the video: 0.4% of the
+    // width, floor 2px.
+    final markPaint = Paint()..color = Colors.black87;
+    final markWidth = (size.width * 0.004).clamp(2.0, 4.0);
     for (final chapter in chapters) {
       final startMs = chapter.start.inMilliseconds;
       if (startMs <= 0 || startMs >= total) continue;
       final x = size.width * (startMs / total);
       canvas.drawRect(
-        Rect.fromLTWH(x - markWidth / 2, centerY - 1.5, markWidth, 3),
-        paint,
+        Rect.fromLTWH(x - markWidth / 2, top, markWidth, trackHeight),
+        markPaint,
       );
     }
   }
 
   @override
-  bool shouldRepaint(_ChapterMarkersPainter oldDelegate) =>
-      oldDelegate.chapters != chapters || oldDelegate.duration != duration;
+  bool shouldRepaint(_TrackPainter oldDelegate) =>
+      oldDelegate.chapters != chapters ||
+      oldDelegate.duration != duration ||
+      oldDelegate.buffered != buffered;
 }
 
 class _RoundControl extends StatelessWidget {
-  const _RoundControl({required this.icon, required this.onTap, this.size = 34});
+  const _RoundControl(
+      {required this.icon, required this.onTap, this.size = 34});
   final IconData icon;
   final VoidCallback onTap;
   final double size;
@@ -763,7 +1293,10 @@ class _WatchDetails extends ConsumerWidget {
     final isSaved = ref.watch(isWatchLaterProvider(item.videoId));
     final isSubscribed = ref.watch(isSubscribedProvider(item.channelId));
     final download = ref.watch(downloadForVideoProvider(item.videoId));
-    final related = ref.watch(searchResultsProvider(item.title));
+    // YouTube's own related list. This used to be a text search for the
+    // video's own title, which mostly returned the same channel's back
+    // catalogue instead of anything new.
+    final related = ref.watch(relatedVideosProvider(item.videoId));
 
     return ListView(
       padding: EdgeInsets.zero,
@@ -790,8 +1323,8 @@ class _WatchDetails extends ConsumerWidget {
               Text(
                 <String>[
                   if (item.viewCount != null)
-                    l10n.viewsCount(_compactCount(item.viewCount!)),
-                  _relativeDate(l10n, item.publishedAt),
+                    l10n.viewsCount(compactCount(item.viewCount!)),
+                  relativeDate(l10n, item.publishedAt),
                 ].where((p) => p.isNotEmpty).join(' · '),
                 style: theme.textTheme.bodySmall,
               ),
@@ -811,16 +1344,12 @@ class _WatchDetails extends ConsumerWidget {
                 icon: Icons.reply,
                 label: l10n.share,
                 flipIcon: true,
-                onTap: () async {
-                  await Clipboard.setData(
-                    ClipboardData(text: 'https://youtu.be/${item.videoId}'),
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(l10n.linkCopied)),
-                    );
-                  }
-                },
+                // The system sheet, not a clipboard copy — sharing a
+                // video means picking who to send it to.
+                onTap: () => Share.share(
+                  'https://youtu.be/${item.videoId}',
+                  subject: item.title,
+                ),
               ),
               _DownloadPill(item: item, download: download),
               _ActionPill(
@@ -828,13 +1357,17 @@ class _WatchDetails extends ConsumerWidget {
                     ? Icons.playlist_add_check
                     : Icons.playlist_add,
                 label: l10n.save,
-                onTap: () =>
-                    ref.read(libraryActionsProvider).toggleWatchLater(item),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  ref.read(libraryActionsProvider).toggleWatchLater(item);
+                },
               ),
               _ActionPill(
                 icon: Icons.comment_outlined,
                 label: l10n.comments,
-                onTap: () => context.push('/comments/${item.videoId}'),
+                // A sheet, so the video keeps playing above it instead
+                // of being replaced by a page.
+                onTap: () => showCommentsSheet(context, item.videoId),
               ),
             ],
           ),
@@ -846,11 +1379,18 @@ class _WatchDetails extends ConsumerWidget {
         ListTile(
           onTap: () => context.push('/channel/${item.channelId}'),
           leading: CircleAvatar(
-            backgroundColor: theme.colorScheme.primaryContainer,
-            child: Text(
-              item.author.isNotEmpty ? item.author[0].toUpperCase() : '?',
-              style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
-            ),
+            backgroundColor: theme.colorScheme.surfaceContainerHighest,
+            backgroundImage: item.channelAvatarUrl != null
+                ? CachedNetworkImageProvider(item.channelAvatarUrl!)
+                : null,
+            child: item.channelAvatarUrl == null
+                ? Text(
+                    item.author.isNotEmpty
+                        ? item.author.characters.first.toUpperCase()
+                        : '?',
+                    style: TextStyle(color: theme.colorScheme.onSurface),
+                  )
+                : null,
           ),
           title: Text(
             item.author,
@@ -858,10 +1398,21 @@ class _WatchDetails extends ConsumerWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          // Subscriber count is the other half of the decision to
+          // subscribe; the name alone says nothing about reach.
+          subtitle: item.subscriberCount != null
+              ? Text(
+                  l10n.subscriberCount(compactCount(item.subscriberCount!)),
+                  style: theme.textTheme.bodySmall,
+                )
+              : null,
           trailing: FilledButton.tonal(
-            onPressed: () => ref
-                .read(libraryActionsProvider)
-                .toggleSubscription(item.channelId, item.author),
+            onPressed: () {
+              HapticFeedback.selectionClick();
+              ref
+                  .read(libraryActionsProvider)
+                  .toggleSubscription(item.channelId, item.author);
+            },
             child: Text(
               (isSubscribed.value ?? false) ? l10n.subscribed : l10n.subscribe,
             ),
@@ -870,30 +1421,10 @@ class _WatchDetails extends ConsumerWidget {
 
         // Description
         if (item.description != null && item.description!.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: InkWell(
-              onTap: onToggleDescription,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.description!,
-                    maxLines: descriptionExpanded ? null : 3,
-                    overflow: descriptionExpanded
-                        ? TextOverflow.visible
-                        : TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  Text(
-                    descriptionExpanded ? l10n.showLess : l10n.showMore,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          _DescriptionBlock(
+            description: item.description!,
+            expanded: descriptionExpanded,
+            onToggle: onToggleDescription,
           ),
 
         const Divider(height: 20),
@@ -934,8 +1465,8 @@ class _WatchDetails extends ConsumerWidget {
           child: Text(l10n.upNext, style: theme.textTheme.titleSmall),
         ),
         related.when(
-          data: (groups) {
-            final items = groups.mediaItems
+          data: (videos) {
+            final items = videos
                 .where((MediaItem v) => v.videoId != item.videoId)
                 .take(15)
                 .toList();
@@ -967,26 +1498,113 @@ class _WatchDetails extends ConsumerWidget {
       ],
     );
   }
+}
 
-  static String _compactCount(int value) {
-    if (value >= 1000000000) {
-      return '${(value / 1000000000).toStringAsFixed(1)}B';
+/// The description, with its timestamps turned into jump links.
+///
+/// Long uploads carry their own chapter list in the description — a
+/// plain text block makes the reader scrub for a mark they can already
+/// see written down.
+class _DescriptionBlock extends ConsumerStatefulWidget {
+  const _DescriptionBlock({
+    required this.description,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  final String description;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  @override
+  ConsumerState<_DescriptionBlock> createState() => _DescriptionBlockState();
+}
+
+class _DescriptionBlockState extends ConsumerState<_DescriptionBlock> {
+  /// `1:23` or `01:02:03`, not preceded or followed by another digit.
+  static final _timestamp =
+      RegExp(r'(?<!\d)(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?!\d)');
+
+  /// Held for the widget's lifetime rather than rebuilt per frame —
+  /// gesture recognizers have to be disposed, and one created inside
+  /// build never is.
+  final List<TapGestureRecognizer> _recognizers = [];
+
+  @override
+  void dispose() {
+    for (final recognizer in _recognizers) {
+      recognizer.dispose();
     }
-    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
-    if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}K';
-    return '$value';
+    super.dispose();
   }
 
-  static String _relativeDate(AppLocalizations l10n, DateTime date) {
-    if (date.isBefore(DateTime.utc(2005))) return '';
-    final diff = DateTime.now().difference(date);
-    if (diff.inDays >= 365) return l10n.yearsAgo(diff.inDays ~/ 365);
-    if (diff.inDays >= 30) return l10n.monthsAgo(diff.inDays ~/ 30);
-    if (diff.inDays >= 7) return l10n.weeksAgo(diff.inDays ~/ 7);
-    if (diff.inDays >= 1) return l10n.daysAgo(diff.inDays);
-    if (diff.inHours >= 1) return l10n.hoursAgo(diff.inHours);
-    if (diff.inMinutes >= 1) return l10n.minutesAgo(diff.inMinutes);
-    return l10n.justNow;
+  static Duration _parse(RegExpMatch match) {
+    final hours = int.tryParse(match.group(1) ?? '') ?? 0;
+    final minutes = int.tryParse(match.group(2) ?? '') ?? 0;
+    final seconds = int.tryParse(match.group(3) ?? '') ?? 0;
+    return Duration(hours: hours, minutes: minutes, seconds: seconds);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final description = widget.description;
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final baseStyle = theme.textTheme.bodySmall;
+    final linkStyle = baseStyle?.copyWith(
+      color: theme.colorScheme.primary,
+      fontWeight: FontWeight.w600,
+    );
+
+    for (final recognizer in _recognizers) {
+      recognizer.dispose();
+    }
+    _recognizers.clear();
+
+    final spans = <InlineSpan>[];
+    var cursor = 0;
+    for (final match in _timestamp.allMatches(description)) {
+      if (match.start > cursor) {
+        spans.add(TextSpan(text: description.substring(cursor, match.start)));
+      }
+      final target = _parse(match);
+      final recognizer = TapGestureRecognizer()
+        ..onTap =
+            () => ref.read(playerControllerProvider.notifier).seek(target);
+      _recognizers.add(recognizer);
+      spans.add(
+        TextSpan(text: match[0], style: linkStyle, recognizer: recognizer),
+      );
+      cursor = match.end;
+    }
+    if (cursor < description.length) {
+      spans.add(TextSpan(text: description.substring(cursor)));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text.rich(
+            TextSpan(style: baseStyle, children: spans),
+            maxLines: widget.expanded ? null : 3,
+            overflow:
+                widget.expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+          ),
+          InkWell(
+            onTap: widget.onToggle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                widget.expanded ? l10n.showLess : l10n.showMore,
+                style: baseStyle?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1011,7 +1629,7 @@ class _ActionPill extends StatelessWidget {
     final theme = Theme.of(context);
     final iconWidget = Icon(icon, size: 20, color: theme.colorScheme.onSurface);
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsetsDirectional.only(end: 8),
       child: Material(
         color: theme.yt.actionPillBackground,
         shape: const StadiumBorder(),
@@ -1059,7 +1677,7 @@ class _LikeDislikePill extends ConsumerWidget {
     final votes = ref.watch(videoVotesProvider(item.videoId)).value;
 
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsetsDirectional.only(end: 8),
       child: Material(
         color: theme.yt.actionPillBackground,
         shape: const StadiumBorder(),
@@ -1097,9 +1715,8 @@ class _LikeDislikePill extends ConsumerWidget {
             ),
             Container(width: 1, height: 24, color: theme.dividerColor),
             InkWell(
-              onTap: () => ref
-                  .read(libraryActionsProvider)
-                  .dislike(item.videoId),
+              onTap: () =>
+                  ref.read(libraryActionsProvider).dislike(item.videoId),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Row(

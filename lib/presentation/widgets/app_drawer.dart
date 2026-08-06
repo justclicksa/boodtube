@@ -41,8 +41,11 @@ class AppDrawer extends ConsumerWidget {
           children: [
             // Account header
             ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              contentPadding: const EdgeInsetsDirectional.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.sm,
+              ),
+              minTileHeight: AppSpacing.minTapTarget,
               leading: CircleAvatar(
                 radius: 20,
                 backgroundColor: theme.yt.chipBackground,
@@ -138,7 +141,7 @@ class AppDrawer extends ConsumerWidget {
               label: l10n.settingsTab,
               onTap: () => go('/settings'),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
           ],
         ),
       ),
@@ -153,7 +156,12 @@ class _DrawerHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.xs,
+      ),
       child: Text(
         title,
         style: TextStyle(
@@ -180,8 +188,12 @@ class _DrawerItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // `dense` shaves the row below the 48px floor on a small text
+    // scale; the explicit minimum keeps the target legal without
+    // losing the compact look.
     return ListTile(
       dense: true,
+      minTileHeight: AppSpacing.minTapTarget,
       leading: Icon(icon, size: 22),
       title: Text(label, style: const TextStyle(fontSize: 14)),
       onTap: onTap,
