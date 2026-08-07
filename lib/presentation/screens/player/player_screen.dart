@@ -12,7 +12,8 @@ import 'dart:async';
 // name in services/download_manager.dart.
 import 'package:cached_network_image/cached_network_image.dart'
     show CachedNetworkImageProvider;
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/foundation.dart'
+    show ValueListenable, ValueNotifier, defaultTargetPlatform;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
@@ -94,7 +95,15 @@ class PlayerScreen extends ConsumerStatefulWidget {
 class _PlayerScreenState extends ConsumerState<PlayerScreen>
     with SingleTickerProviderStateMixin {
   late final VideoController _videoController;
-  bool _showControls = true;
+
+  /// Controls visibility rides a notifier, not setState. Measured on a
+  /// release build on a device: setState on this mounted state stopped
+  /// producing a rebuild once fullscreen had been entered, so the bar
+  /// could never appear — while the same frames kept rebuilding
+  /// ValueListenableBuilder subtrees without trouble. Driving the one
+  /// piece of transient state through the path that demonstrably works
+  /// also stops a whole-screen rebuild on every tap.
+  final ValueNotifier<bool> _showControls = ValueNotifier<bool>(true);
   Timer? _hideTimer;
   bool _descriptionExpanded = false;
 
@@ -150,7 +159,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       onModeChanged: (active) {
         if (!mounted) return;
         ref.read(playerControllerProvider.notifier).setPiPActive(active);
-        setState(() => _showControls = !active);
+        _setShowControls(!active);
       },
     );
 
@@ -173,6 +182,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   @override
   void dispose() {
     _hideTimer?.cancel();
+    _showControls.dispose();
     _settle.dispose();
     // Writing to a provider during a dependent's dispose is not allowed,
     // so hand the flag back on the next frame, through the container
@@ -185,16 +195,30 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     super.dispose();
   }
 
+  /// Single door for every write, so the hide timer, the tap and the PiP
+  /// callback cannot each hold their own idea of whether the bar is up.
+  void _setShowControls(bool value) {
+    _showControls.value = value;
+  }
+
   void _restartHideTimer() {
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _showControls = false);
+      if (mounted) _setShowControls(false);
     });
   }
 
+  /// Tap to show, tap again to hide. Hiding by hand also drops the
+  /// pending auto-hide, so a timer armed by the previous tap cannot fire
+  /// later over a bar the user has already dismissed.
   void _toggleControls() {
-    setState(() => _showControls = !_showControls);
-    if (_showControls) _restartHideTimer();
+    final next = !_showControls.value;
+    _setShowControls(next);
+    if (next) {
+      _restartHideTimer();
+    } else {
+      _hideTimer?.cancel();
+    }
   }
 
   // ============================================================
@@ -319,6 +343,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Watched from a Consumer rather than from this element. Measured on
+    // a release build on a device: once fullscreen has been entered this
+    // element stops rebuilding altogether — neither setState nor a
+    // provider change produces a build here again, while descendant
+    // Consumer and ValueListenableBuilder subtrees keep rebuilding
+    // normally in the same frames. That is what froze the control bar,
+    // the play/pause icon, and the layout itself on the way back out of
+    // fullscreen: the state changed and nothing re-read it. Reading the
+    // state one level down puts every rebuild on the path that works.
+    return Consumer(
+      builder: (context, ref, _) => _buildPlayer(context, ref),
+    );
+  }
+
+  Widget _buildPlayer(BuildContext context, WidgetRef ref) {
     final state = ref.watch(playerControllerProvider);
     final isFullscreen = state.isFullscreen;
 
@@ -389,6 +428,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           child: Column(
             children: [
               if (expanded)
+                // Full bleed on purpose: a tap has to register anywhere
+                // on the screen, and letterboxing the surface to 16:9
+                // would leave bars that swallow every gesture landing on
+                // them. mpv letterboxes the picture inside this box.
                 Expanded(
                   child: Stack(
                     children: [player, _gestureHud()],
@@ -507,7 +550,7 @@ class _PlayerSurface extends ConsumerStatefulWidget {
 
   final PlayerStateData state;
   final VideoController videoController;
-  final bool showControls;
+  final ValueListenable<bool> showControls;
   final VoidCallback onToggleControls;
   final VoidCallback onInteract;
   final VoidCallback onToggleFullscreen;
@@ -542,6 +585,7 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
   @override
   void dispose() {
     _seekBadgeTimer?.cancel();
+    _singleTapTimer?.cancel();
     super.dispose();
   }
 
@@ -665,7 +709,13 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
           widget.onCollapseDragEnd(velocity);
         }
       case PlayerVerticalDragMode.leaveFullscreen:
-        if (total > 60 || velocity > 700) widget.onToggleFullscreen();
+        // Either direction leaves. An upward swipe used to be claimed by
+        // this mode and then dropped for pointing the wrong way, so most
+        // of the screen swallowed the gesture without doing anything at
+        // all — no exit, no brightness, no volume.
+        if (total.abs() > 60 || velocity.abs() > 700) {
+          widget.onToggleFullscreen();
+        }
       case PlayerVerticalDragMode.brightness:
       case PlayerVerticalDragMode.volume:
         widget.onGestureEnd();
@@ -674,12 +724,39 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
     }
   }
 
+  /// Tap-vs-double-tap is disambiguated by hand, not by Flutter's
+  /// DoubleTapGestureRecognizer, which resolves a single tap by arena
+  /// sweep after the double-tap deadline and lost taps outright on a
+  /// physical device.
+  ///
+  /// There is exactly one gesture region over the surface. A second one
+  /// used to be laid over it whenever the controls were hidden, which
+  /// put two identical detectors in one arena for every tap — and made
+  /// the hidden state behave differently from the visible one for no
+  /// reason the user could see. The surface region already covers
+  /// everything with HitTestBehavior.opaque, and the controls plane
+  /// ignores pointers while hidden, so nothing needed the second layer.
+  Timer? _singleTapTimer;
+
+  void _onTapUp(TapUpDetails details) {
+    final pending = _singleTapTimer;
+    if (pending != null && pending.isActive) {
+      pending.cancel();
+      _singleTapTimer = null;
+      _onDoubleTap(details.globalPosition);
+      return;
+    }
+    _singleTapTimer = Timer(const Duration(milliseconds: 250), () {
+      _singleTapTimer = null;
+      widget.onToggleControls();
+    });
+  }
+
   Widget _gestureRegion({required Widget child, Key? key}) {
     return GestureDetector(
       key: key,
       behavior: HitTestBehavior.opaque,
-      onTap: widget.onToggleControls,
-      onDoubleTapDown: (details) => _onDoubleTap(details.globalPosition),
+      onTapUp: _onTapUp,
       onLongPressStart: (_) => _startSpeedHold(),
       onLongPressEnd: (_) => _endSpeedHold(),
       onLongPressCancel: _endSpeedHold,
@@ -767,16 +844,6 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
             // above it and guarantees that a tap or vertical swipe reaches
             // BoodTube. It disappears when controls are visible so buttons
             // and the progress slider remain directly interactive.
-            if (!widget.showControls && state.error == null)
-              Positioned.fill(
-                child: _gestureRegion(
-                  key: const ValueKey(
-                    'player-hidden-controls-gesture-layer',
-                  ),
-                  child: const SizedBox.expand(),
-                ),
-              ),
-
             if (state.isLoading || (state.isBuffering && state.error == null))
               Center(
                 child: Column(
@@ -840,17 +907,21 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
               // Fading rather than snapping: the controls appearing and
               // vanishing between frames is what made every tap feel
               // like a redraw instead of a response.
-              IgnorePointer(
-                ignoring: !widget.showControls,
-                child: AnimatedOpacity(
-                  opacity: widget.showControls ? 1 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOut,
-                  child: _ControlsOverlay(
-                    state: state,
-                    onInteract: widget.onInteract,
-                    onToggleFullscreen: widget.onToggleFullscreen,
+              ValueListenableBuilder<bool>(
+                valueListenable: widget.showControls,
+                builder: (context, shown, child) => IgnorePointer(
+                  ignoring: !shown,
+                  child: AnimatedOpacity(
+                    opacity: shown ? 1 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    child: child,
                   ),
+                ),
+                child: _ControlsOverlay(
+                  state: state,
+                  onInteract: widget.onInteract,
+                  onToggleFullscreen: widget.onToggleFullscreen,
                 ),
               ),
           ],
@@ -947,6 +1018,10 @@ class _ControlsOverlay extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watched, not taken from the constructor: the snapshot handed down
+    // from the screen went stale in fullscreen and left the play button
+    // showing pause over a paused video.
+    final state = ref.watch(playerControllerProvider);
     final controller = ref.read(playerControllerProvider.notifier);
     final quickActions = ref.watch(
       settingsControllerProvider.select(
@@ -971,104 +1046,110 @@ class _ControlsOverlay extends ConsumerWidget {
             stops: [0, 0.45, 1],
           ),
         ),
-        child: Column(
-          children: [
-            // Top bar
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.keyboard_arrow_down,
-                      color: Colors.white, size: 28),
-                  onPressed: () {
-                    if (state.isFullscreen) {
-                      onToggleFullscreen();
-                    } else {
-                      context.pop();
-                    }
-                  },
-                ),
-                const Spacer(),
-                // Only where the platform can actually do it. On iOS PiP
-                // needs an AVPlayerLayer the system owns, and mpv renders
-                // into a texture — so the button would never do anything
-                // but show an apology.
-                for (final action in quickActions)
-                  if (action != PlayerQuickAction.pictureInPicture ||
-                      PiPManager.isAvailableOnThisPlatform)
-                    _QuickActionButton(
-                      action: action,
-                      item: state.currentItem,
-                      hasSubtitles:
-                          state.currentItem?.subtitles.isNotEmpty ?? false,
-                      onInteract: onInteract,
-                    ),
-              ],
-            ),
-
-            // Center transport
-            Expanded(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+        // Fullscreen turns the screen's SafeArea off so the picture can
+        // reach the edges, which also put the settings button under the
+        // notch. The controls take the inset back for themselves; nested
+        // SafeAreas consume the padding once, so portrait is unaffected.
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Top bar
+              Row(
                 children: [
-                  _RoundControl(
-                    icon: Icons.replay_10,
-                    onTap: () {
-                      controller.seekBackward();
-                      onInteract();
+                  IconButton(
+                    icon: const Icon(Icons.keyboard_arrow_down,
+                        color: Colors.white, size: 28),
+                    onPressed: () {
+                      if (state.isFullscreen) {
+                        onToggleFullscreen();
+                      } else {
+                        context.pop();
+                      }
                     },
                   ),
-                  const SizedBox(width: 28),
-                  _RoundControl(
-                    icon: state.isPlaying
-                        ? Icons.pause
-                        : (state.position >= state.duration &&
-                                state.duration > Duration.zero)
-                            ? Icons.replay
-                            : Icons.play_arrow,
-                    size: 44,
-                    onTap: () {
-                      controller.togglePlayPause();
-                      onInteract();
-                    },
-                  ),
-                  const SizedBox(width: 28),
-                  _RoundControl(
-                    icon: Icons.forward_10,
-                    onTap: () {
-                      controller.seekForward();
-                      onInteract();
-                    },
-                  ),
+                  const Spacer(),
+                  // Only where the platform can actually do it. On iOS PiP
+                  // needs an AVPlayerLayer the system owns, and mpv renders
+                  // into a texture — so the button would never do anything
+                  // but show an apology.
+                  for (final action in quickActions)
+                    if (action != PlayerQuickAction.pictureInPicture ||
+                        PiPManager.isAvailableOnThisPlatform)
+                      _QuickActionButton(
+                        action: action,
+                        item: state.currentItem,
+                        hasSubtitles:
+                            state.currentItem?.subtitles.isNotEmpty ?? false,
+                        onInteract: onInteract,
+                      ),
                 ],
               ),
-            ),
 
-            // Current chapter, the way YouTube labels the scrubber.
-            if (_currentChapter(state) != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text(
-                    _currentChapter(state)!.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+              // Center transport
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _RoundControl(
+                      icon: Icons.replay_10,
+                      onTap: () {
+                        controller.seekBackward();
+                        onInteract();
+                      },
                     ),
-                  ),
+                    const SizedBox(width: 28),
+                    _RoundControl(
+                      icon: state.isPlaying
+                          ? Icons.pause
+                          : (state.position >= state.duration &&
+                                  state.duration > Duration.zero)
+                              ? Icons.replay
+                              : Icons.play_arrow,
+                      size: 44,
+                      onTap: () {
+                        controller.togglePlayPause();
+                        onInteract();
+                      },
+                    ),
+                    const SizedBox(width: 28),
+                    _RoundControl(
+                      icon: Icons.forward_10,
+                      onTap: () {
+                        controller.seekForward();
+                        onInteract();
+                      },
+                    ),
+                  ],
                 ),
               ),
 
-            // Bottom bar
-            _ScrubBar(
-              state: state,
-              onInteract: onInteract,
-              onToggleFullscreen: onToggleFullscreen,
-            ),
-          ],
+              // Current chapter, the way YouTube labels the scrubber.
+              if (_currentChapter(state) != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      _currentChapter(state)!.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+
+              // Bottom bar
+              _ScrubBar(
+                state: state,
+                onInteract: onInteract,
+                onToggleFullscreen: onToggleFullscreen,
+              ),
+            ],
+          ),
         ),
       ),
     );
