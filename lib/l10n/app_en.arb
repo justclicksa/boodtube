@@ -366,6 +366,7 @@
     }
   },
   "noComments": "No comments yet",
+  "commentsUnavailable": "Comments could not be loaded",
   "noCommentsSubtitle": "Be the first to comment",
   "unsubscribed": "Unsubscribed",
   "noVideos": "No videos",

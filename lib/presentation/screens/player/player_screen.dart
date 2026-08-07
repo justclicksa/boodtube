@@ -438,15 +438,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                   ),
                 )
               else
-                // Loose so the video gives way rather than overflowing
-                // if this layout ever renders in a viewport too short
-                // for a full 16:9 — mid-rotation, or a split view.
-                Flexible(
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Stack(
-                      children: [player, _gestureHud()],
-                    ),
+                // Not Flexible. Flexible defaults to flex: 1, so
+                // the video and the watch page below it each took
+                // half the column — and the video, being loose,
+                // used only its natural 16:9 height out of that
+                // half. The remainder of its share was dead space
+                // nothing could fill, which is the black band that
+                // sat under the suggestions. Measured on device:
+                // 863 available, 430 handed to the watch page,
+                // 186 lost. Sized to its own ratio, the video
+                // takes what it needs and Expanded gets the rest.
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Stack(
+                    children: [player, _gestureHud()],
                   ),
                 ),
               if (!expanded)
@@ -475,14 +480,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
 
     // Shrinking toward the top keeps the video under the finger while
-    // the page narrows toward the mini player's footprint.
-    //
-    // These wrappers are unconditional even at rest. Introducing them
-    // only once the drag starts changes the shape of the tree, which
-    // remounts everything below — including the GestureDetector whose
-    // drag is in flight. The recognizer is then disposed mid-gesture and
-    // neither onVerticalDragEnd nor onVerticalDragCancel ever fires, so
-    // the player sticks halfway down with no way back.
+    // the page narrows toward the mini player's footprint. Wrapping the
+    // scaffold rather than rebuilding the tree into a different shape
+    // only once the drag starts matters: changing the shape remounts
+    // everything below, including the GestureDetector whose drag is in
+    // flight, and the recognizer is then disposed mid-gesture.
     return Transform.translate(
       offset: Offset(0, _dragOffset),
       child: Transform.scale(

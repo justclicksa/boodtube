@@ -753,6 +753,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get noComments => 'لا توجد تعليقات بعد';
 
   @override
+  String get commentsUnavailable => 'تعذّر تحميل التعليقات';
+
+  @override
   String get noCommentsSubtitle => 'كن أول من يعلّق';
 
   @override

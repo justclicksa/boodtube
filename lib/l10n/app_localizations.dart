@@ -1400,6 +1400,12 @@ abstract class AppLocalizations {
   /// **'No comments yet'**
   String get noComments;
 
+  /// No description provided for @commentsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Comments could not be loaded'**
+  String get commentsUnavailable;
+
   /// No description provided for @noCommentsSubtitle.
   ///
   /// In en, this message translates to:

@@ -9,6 +9,7 @@
 
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
+import '../../core/errors/exceptions.dart';
 import '../../domain/entities/comment_item.dart';
 
 class CommentsService {
@@ -50,9 +51,16 @@ class CommentsService {
                 isPinned: false, // FIXED: not in Comment
               ))
           .toList();
+    } on Exception {
+      rethrow;
     } catch (e) {
-      // Some videos have comments disabled
-      return [];
+      // A parse failure is not "this video has comments turned off", and
+      // swallowing it here is what made the comment sheet look empty on
+      // every video instead of broken on all of them. youtube_explode
+      // reads a commentRenderer YouTube no longer sends, so its null
+      // check throws for every video; the caller has to be able to say
+      // so rather than render nothing.
+      throw ParseException(e.toString());
     }
   }
 

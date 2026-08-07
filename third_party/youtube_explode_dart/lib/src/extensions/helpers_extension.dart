@@ -182,7 +182,15 @@ extension StringUtility2 on String? {
       return null;
     }
 
-    final qty = int.parse(parts.first);
+    // BOODTUBE PATCH: the "Streamed x y ago" shape is handled above by
+    // dropping the first word, but a finished broadcast also reaches
+    // here as three words still led by "Streamed", and int.parse threw
+    // out of the whole related-videos list for it. An unreadable date is
+    // worth a null, not an exception.
+    final qty = int.tryParse(parts.first);
+    if (qty == null) {
+      return null;
+    }
 
     // Try to get the unit
     final unit = parts[1];
