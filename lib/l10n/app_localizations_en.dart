@@ -747,6 +747,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commentsUnavailable => 'Comments could not be loaded';
 
   @override
+  String get description => 'Description';
+
+  @override
   String get noCommentsSubtitle => 'Be the first to comment';
 
   @override

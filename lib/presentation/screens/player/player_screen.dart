@@ -105,7 +105,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   /// also stops a whole-screen rebuild on every tap.
   final ValueNotifier<bool> _showControls = ValueNotifier<bool>(true);
   Timer? _hideTimer;
-  bool _descriptionExpanded = false;
 
   /// Transient HUD shown while dragging for brightness/volume.
   double? _gestureValue;
@@ -465,11 +464,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           opacity: 1 - collapseProgress,
                           child: _WatchDetails(
                             item: state.currentItem!,
-                            descriptionExpanded: _descriptionExpanded,
-                            onToggleDescription: () => setState(
-                              () =>
-                                  _descriptionExpanded = !_descriptionExpanded,
-                            ),
                           ),
                         ),
                 ),
@@ -1522,13 +1516,9 @@ class _SponsorSkipButton extends StatelessWidget {
 class _WatchDetails extends ConsumerWidget {
   const _WatchDetails({
     required this.item,
-    required this.descriptionExpanded,
-    required this.onToggleDescription,
   });
 
   final MediaItem item;
-  final bool descriptionExpanded;
-  final VoidCallback onToggleDescription;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1544,36 +1534,41 @@ class _WatchDetails extends ConsumerWidget {
     final related = ref.watch(relatedVideosProvider(item.videoId));
 
     return ListView(
-      padding: EdgeInsets.zero,
+      // Room under the last suggestion so it is not flush against the
+      // bottom of the screen.
+      padding: const EdgeInsets.only(bottom: 24),
       children: [
-        // Title + metadata
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                item.title,
-                maxLines: descriptionExpanded ? null : 2,
-                overflow: descriptionExpanded
-                    ? TextOverflow.visible
-                    : TextOverflow.ellipsis,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  height: 1.3,
+        // Title + metadata. Tapping opens the description sheet, which
+        // is where YouTube puts the rest of the title too.
+        GestureDetector(
+          onTap: () => showDescriptionSheet(context, item),
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    height: 1.3,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                <String>[
-                  if (item.viewCount != null)
-                    l10n.viewsCount(compactCount(item.viewCount!)),
-                  relativeDate(l10n, item.publishedAt),
-                ].where((p) => p.isNotEmpty).join(' · '),
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  <String>[
+                    if (item.viewCount != null)
+                      l10n.viewsCount(compactCount(item.viewCount!)),
+                    relativeDate(l10n, item.publishedAt),
+                  ].where((p) => p.isNotEmpty).join(' · '),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
           ),
         ),
 
@@ -1582,7 +1577,10 @@ class _WatchDetails extends ConsumerWidget {
           height: 52,
           child: ListView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            // Directional: a horizontal list in RTL starts at the
+            // right, and symmetric insets clipped the first pill —
+            // like/dislike — against the edge it starts on.
+            padding: const EdgeInsetsDirectional.fromSTEB(12, 6, 12, 6),
             children: [
               _LikeDislikePill(item: item, liked: isFavorite.value ?? false),
               _ActionPill(
@@ -1607,13 +1605,6 @@ class _WatchDetails extends ConsumerWidget {
                   ref.read(libraryActionsProvider).toggleWatchLater(item);
                 },
               ),
-              _ActionPill(
-                icon: Icons.comment_outlined,
-                label: l10n.comments,
-                // A sheet, so the video keeps playing above it instead
-                // of being replaced by a page.
-                onTap: () => showCommentsSheet(context, item.videoId),
-              ),
               if (item.isLive)
                 _ActionPill(
                   icon: Icons.chat_bubble_outline,
@@ -1624,7 +1615,9 @@ class _WatchDetails extends ConsumerWidget {
           ),
         ),
 
-        const Divider(height: 20),
+        // YouTube separates these blocks with space and rounded cards,
+        // not with rules. The grey lines read as a settings list.
+        const SizedBox(height: 4),
 
         // Channel row
         ListTile(
@@ -1672,13 +1665,11 @@ class _WatchDetails extends ConsumerWidget {
 
         // Description
         if (item.description != null && item.description!.isNotEmpty)
-          _DescriptionBlock(
-            description: item.description!,
-            expanded: descriptionExpanded,
-            onToggle: onToggleDescription,
-          ),
+          _DescriptionCard(item: item),
 
-        const Divider(height: 20),
+        // Comments get a card of their own, the way YouTube shows them:
+        // the top comment visible without a tap, the thread one tap away.
+        _CommentsCard(videoId: item.videoId),
 
         // Chapters — tap to jump, like YouTube's chapter list.
         if (item.chapters.isNotEmpty) ...[
@@ -1707,7 +1698,7 @@ class _WatchDetails extends ConsumerWidget {
               },
             ),
           ),
-          const Divider(height: 20),
+          const SizedBox(height: 8),
         ],
 
         // Suggestions
@@ -1723,17 +1714,15 @@ class _WatchDetails extends ConsumerWidget {
                 .toList();
             return Column(
               children: [
+                // No fixed height: the horizontal card sizes itself
+                // from its thumbnail and however many lines the title
+                // takes. Pinning it clipped the taller ones.
                 for (final video in items)
-                  SizedBox(
-                    // Fits the 90px thumbnail plus the three-line text
-                    // column the horizontal card lays out beside it.
-                    height: 122,
-                    child: VideoCard(
-                      item: video,
-                      isHorizontal: true,
-                      onTap: () => context.pushReplacement(
-                        '/player/${video.videoId}',
-                      ),
+                  VideoCard(
+                    item: video,
+                    isHorizontal: true,
+                    onTap: () => context.pushReplacement(
+                      '/player/${video.videoId}',
                     ),
                   ),
               ],
@@ -1751,6 +1740,216 @@ class _WatchDetails extends ConsumerWidget {
   }
 }
 
+/// YouTube's description card: two lines and a "more", opening the full
+/// text in a sheet so the video keeps playing above it.
+///
+/// It used to expand in place through setState on the player screen —
+/// the same setState that stops rebuilding once fullscreen has been
+/// entered. A sheet has no such dependency.
+class _DescriptionCard extends StatelessWidget {
+  const _DescriptionCard({required this.item});
+
+  final MediaItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final description = item.description ?? '';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      child: Material(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: theme.brightness == Brightness.dark ? 0.35 : 1,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => showDescriptionSheet(context, item),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  l10n.showMore,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The full description, its chapters, and the counts YouTube puts at
+/// the top of the same sheet.
+Future<void> showDescriptionSheet(BuildContext context, MediaItem item) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (context) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        final theme = Theme.of(context);
+        final l10n = AppLocalizations.of(context);
+        return ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.description,
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: l10n.close,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            Text(
+              item.title,
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            if ((item.description ?? '').isNotEmpty)
+              _DescriptionBlock(
+                description: item.description!,
+                expanded: true,
+              ),
+            if (item.chapters.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                l10n.chapters,
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              for (final chapter in item.chapters)
+                Consumer(
+                  builder: (context, ref, _) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(chapter.title),
+                    trailing: Text(DurationFormatter.format(chapter.start)),
+                    onTap: () {
+                      ref
+                          .read(playerControllerProvider.notifier)
+                          .seek(chapter.start);
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ),
+            ],
+          ],
+        );
+      },
+    ),
+  );
+}
+
+/// YouTube's comments card: the top comment, tappable into the thread.
+///
+/// It states a load failure rather than showing an empty thread.
+/// youtube_explode reads a commentRenderer YouTube no longer sends, so
+/// every video fails here today — and the service used to swallow that
+/// into an empty list, which read as "nobody has commented".
+class _CommentsCard extends ConsumerWidget {
+  const _CommentsCard({required this.videoId});
+
+  final String videoId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final comments = ref.watch(commentsProvider(videoId));
+
+    final Widget body = switch (comments) {
+      AsyncData(:final value) when value.isNotEmpty => Text(
+          value.first.content,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodyMedium,
+        ),
+      AsyncData() => Text(l10n.noComments, style: theme.textTheme.bodyMedium),
+      AsyncError() => Row(
+          children: [
+            Icon(Icons.error_outline, size: 18, color: theme.colorScheme.error),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                l10n.commentsUnavailable,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.error),
+              ),
+            ),
+          ],
+        ),
+      _ => const SizedBox(
+          height: 18,
+          width: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+    };
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Material(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: theme.brightness == Brightness.dark ? 0.35 : 1,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => showCommentsSheet(context, videoId),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.comments,
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                body,
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The description, with its timestamps turned into jump links.
 ///
 /// Long uploads carry their own chapter list in the description — a
@@ -1760,12 +1959,15 @@ class _DescriptionBlock extends ConsumerStatefulWidget {
   const _DescriptionBlock({
     required this.description,
     required this.expanded,
-    required this.onToggle,
+    this.onToggle,
   });
 
   final String description;
   final bool expanded;
-  final VoidCallback onToggle;
+
+  /// Null inside the description sheet, where the whole text is already
+  /// showing and there is nothing left to expand.
+  final VoidCallback? onToggle;
 
   @override
   ConsumerState<_DescriptionBlock> createState() => _DescriptionBlockState();
@@ -1843,16 +2045,17 @@ class _DescriptionBlockState extends ConsumerState<_DescriptionBlock> {
             overflow:
                 widget.expanded ? TextOverflow.visible : TextOverflow.ellipsis,
           ),
-          InkWell(
-            onTap: widget.onToggle,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Text(
-                widget.expanded ? l10n.showLess : l10n.showMore,
-                style: baseStyle?.copyWith(fontWeight: FontWeight.w600),
+          if (widget.onToggle != null)
+            InkWell(
+              onTap: widget.onToggle,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text(
+                  widget.expanded ? l10n.showLess : l10n.showMore,
+                  style: baseStyle?.copyWith(fontWeight: FontWeight.w600),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
