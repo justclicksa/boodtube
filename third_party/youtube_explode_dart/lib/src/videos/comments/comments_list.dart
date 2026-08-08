@@ -37,6 +37,7 @@ class CommentsList extends BasePagedList<Comment> {
               e.repliesCount ?? 0,
               e.isHearted,
               e.continuation,
+              e.channelThumbnail,
             ),
           )
           .toList(growable: false),

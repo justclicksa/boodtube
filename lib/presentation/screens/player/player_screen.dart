@@ -1892,11 +1892,34 @@ class _CommentsCard extends ConsumerWidget {
     final comments = ref.watch(commentsProvider(videoId));
 
     final Widget body = switch (comments) {
-      AsyncData(:final value) when value.isNotEmpty => Text(
-          value.first.content,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodyMedium,
+      AsyncData(:final value) when value.isNotEmpty => Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              radius: 14,
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+              backgroundImage: value.first.authorAvatarUrl != null
+                  ? CachedNetworkImageProvider(value.first.authorAvatarUrl!)
+                  : null,
+              child: value.first.authorAvatarUrl == null
+                  ? Text(
+                      value.first.author.isNotEmpty
+                          ? value.first.author.characters.first.toUpperCase()
+                          : '?',
+                      style: const TextStyle(fontSize: 12),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                value.first.content,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+          ],
         ),
       AsyncData() => Text(l10n.noComments, style: theme.textTheme.bodyMedium),
       AsyncError() => Row(
@@ -1959,15 +1982,10 @@ class _DescriptionBlock extends ConsumerStatefulWidget {
   const _DescriptionBlock({
     required this.description,
     required this.expanded,
-    this.onToggle,
   });
 
   final String description;
   final bool expanded;
-
-  /// Null inside the description sheet, where the whole text is already
-  /// showing and there is nothing left to expand.
-  final VoidCallback? onToggle;
 
   @override
   ConsumerState<_DescriptionBlock> createState() => _DescriptionBlockState();
@@ -2045,17 +2063,6 @@ class _DescriptionBlockState extends ConsumerState<_DescriptionBlock> {
             overflow:
                 widget.expanded ? TextOverflow.visible : TextOverflow.ellipsis,
           ),
-          if (widget.onToggle != null)
-            InkWell(
-              onTap: widget.onToggle,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Text(
-                  widget.expanded ? l10n.showLess : l10n.showMore,
-                  style: baseStyle?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
         ],
       ),
     );

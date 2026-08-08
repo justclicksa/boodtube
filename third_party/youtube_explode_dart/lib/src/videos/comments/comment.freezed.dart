@@ -1,6 +1,5 @@
-// dart format width=80
-// coverage:ignore-file
 // GENERATED CODE - DO NOT MODIFY BY HAND
+// coverage:ignore-file
 // ignore_for_file: type=lint
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
@@ -42,6 +41,14 @@ mixin _$Comment {
   @internal
   String? get continuation;
 
+  /// BOODTUBE PATCH: the author's avatar. The entity payload YouTube
+  /// sends now carries avatarThumbnailUrl, and the parser was already
+  /// reading it with nowhere to put it — a comment list without faces
+  /// does not look like YouTube's.
+  ///
+  /// Optional and last so every existing call site still compiles.
+  String? get authorAvatarUrl;
+
   /// Create a copy of Comment
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -67,16 +74,27 @@ mixin _$Comment {
             (identical(other.isHearted, isHearted) ||
                 other.isHearted == isHearted) &&
             (identical(other.continuation, continuation) ||
-                other.continuation == continuation));
+                other.continuation == continuation) &&
+            (identical(other.authorAvatarUrl, authorAvatarUrl) ||
+                other.authorAvatarUrl == authorAvatarUrl));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, author, channelId, text,
-      likeCount, publishedTime, replyCount, isHearted, continuation);
+  int get hashCode => Object.hash(
+      runtimeType,
+      author,
+      channelId,
+      text,
+      likeCount,
+      publishedTime,
+      replyCount,
+      isHearted,
+      continuation,
+      authorAvatarUrl);
 
   @override
   String toString() {
-    return 'Comment(author: $author, channelId: $channelId, text: $text, likeCount: $likeCount, publishedTime: $publishedTime, replyCount: $replyCount, isHearted: $isHearted, continuation: $continuation)';
+    return 'Comment(author: $author, channelId: $channelId, text: $text, likeCount: $likeCount, publishedTime: $publishedTime, replyCount: $replyCount, isHearted: $isHearted, continuation: $continuation, authorAvatarUrl: $authorAvatarUrl)';
   }
 }
 
@@ -93,7 +111,8 @@ abstract mixin class $CommentCopyWith<$Res> {
       String publishedTime,
       int replyCount,
       bool isHearted,
-      @internal String? continuation});
+      @internal String? continuation,
+      String? authorAvatarUrl});
 
   $ChannelIdCopyWith<$Res> get channelId;
 }
@@ -118,6 +137,7 @@ class _$CommentCopyWithImpl<$Res> implements $CommentCopyWith<$Res> {
     Object? replyCount = null,
     Object? isHearted = null,
     Object? continuation = freezed,
+    Object? authorAvatarUrl = freezed,
   }) {
     return _then(_self.copyWith(
       author: null == author
@@ -152,6 +172,10 @@ class _$CommentCopyWithImpl<$Res> implements $CommentCopyWith<$Res> {
           ? _self.continuation
           : continuation // ignore: cast_nullable_to_non_nullable
               as String?,
+      authorAvatarUrl: freezed == authorAvatarUrl
+          ? _self.authorAvatarUrl
+          : authorAvatarUrl // ignore: cast_nullable_to_non_nullable
+              as String?,
     ));
   }
 
@@ -166,6 +190,220 @@ class _$CommentCopyWithImpl<$Res> implements $CommentCopyWith<$Res> {
   }
 }
 
+/// Adds pattern-matching-related methods to [Comment].
+extension CommentPatterns on Comment {
+  /// A variant of `map` that fallback to returning `orElse`.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case _:
+  ///     return orElse();
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>(
+    TResult Function(_Comment value)? $default, {
+    required TResult orElse(),
+  }) {
+    final _that = this;
+    switch (_that) {
+      case _Comment() when $default != null:
+        return $default(_that);
+      case _:
+        return orElse();
+    }
+  }
+
+  /// A `switch`-like method, using callbacks.
+  ///
+  /// Callbacks receives the raw object, upcasted.
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case final Subclass2 value:
+  ///     return ...;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>(
+    TResult Function(_Comment value) $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _Comment():
+        return $default(_that);
+      case _:
+        throw StateError('Unexpected subclass');
+    }
+  }
+
+  /// A variant of `map` that fallback to returning `null`.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case _:
+  ///     return null;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>(
+    TResult? Function(_Comment value)? $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _Comment() when $default != null:
+        return $default(_that);
+      case _:
+        return null;
+    }
+  }
+
+  /// A variant of `when` that fallback to an `orElse` callback.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case _:
+  ///     return orElse();
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>(
+    TResult Function(
+            String author,
+            ChannelId channelId,
+            String text,
+            int likeCount,
+            String publishedTime,
+            int replyCount,
+            bool isHearted,
+            @internal String? continuation,
+            String? authorAvatarUrl)?
+        $default, {
+    required TResult orElse(),
+  }) {
+    final _that = this;
+    switch (_that) {
+      case _Comment() when $default != null:
+        return $default(
+            _that.author,
+            _that.channelId,
+            _that.text,
+            _that.likeCount,
+            _that.publishedTime,
+            _that.replyCount,
+            _that.isHearted,
+            _that.continuation,
+            _that.authorAvatarUrl);
+      case _:
+        return orElse();
+    }
+  }
+
+  /// A `switch`-like method, using callbacks.
+  ///
+  /// As opposed to `map`, this offers destructuring.
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case Subclass2(:final field2):
+  ///     return ...;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>(
+    TResult Function(
+            String author,
+            ChannelId channelId,
+            String text,
+            int likeCount,
+            String publishedTime,
+            int replyCount,
+            bool isHearted,
+            @internal String? continuation,
+            String? authorAvatarUrl)
+        $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _Comment():
+        return $default(
+            _that.author,
+            _that.channelId,
+            _that.text,
+            _that.likeCount,
+            _that.publishedTime,
+            _that.replyCount,
+            _that.isHearted,
+            _that.continuation,
+            _that.authorAvatarUrl);
+      case _:
+        throw StateError('Unexpected subclass');
+    }
+  }
+
+  /// A variant of `when` that fallback to returning `null`
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case _:
+  ///     return null;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>(
+    TResult? Function(
+            String author,
+            ChannelId channelId,
+            String text,
+            int likeCount,
+            String publishedTime,
+            int replyCount,
+            bool isHearted,
+            @internal String? continuation,
+            String? authorAvatarUrl)?
+        $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _Comment() when $default != null:
+        return $default(
+            _that.author,
+            _that.channelId,
+            _that.text,
+            _that.likeCount,
+            _that.publishedTime,
+            _that.replyCount,
+            _that.isHearted,
+            _that.continuation,
+            _that.authorAvatarUrl);
+      case _:
+        return null;
+    }
+  }
+}
+
 /// @nodoc
 
 class _Comment implements Comment {
@@ -177,7 +415,8 @@ class _Comment implements Comment {
       this.publishedTime,
       this.replyCount,
       this.isHearted,
-      @internal this.continuation);
+      @internal this.continuation,
+      this.authorAvatarUrl);
 
   /// Comment author name.
   @override
@@ -214,6 +453,15 @@ class _Comment implements Comment {
   @internal
   final String? continuation;
 
+  /// BOODTUBE PATCH: the author's avatar. The entity payload YouTube
+  /// sends now carries avatarThumbnailUrl, and the parser was already
+  /// reading it with nowhere to put it — a comment list without faces
+  /// does not look like YouTube's.
+  ///
+  /// Optional and last so every existing call site still compiles.
+  @override
+  final String? authorAvatarUrl;
+
   /// Create a copy of Comment
   /// with the given fields replaced by the non-null parameter values.
   @override
@@ -240,16 +488,27 @@ class _Comment implements Comment {
             (identical(other.isHearted, isHearted) ||
                 other.isHearted == isHearted) &&
             (identical(other.continuation, continuation) ||
-                other.continuation == continuation));
+                other.continuation == continuation) &&
+            (identical(other.authorAvatarUrl, authorAvatarUrl) ||
+                other.authorAvatarUrl == authorAvatarUrl));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, author, channelId, text,
-      likeCount, publishedTime, replyCount, isHearted, continuation);
+  int get hashCode => Object.hash(
+      runtimeType,
+      author,
+      channelId,
+      text,
+      likeCount,
+      publishedTime,
+      replyCount,
+      isHearted,
+      continuation,
+      authorAvatarUrl);
 
   @override
   String toString() {
-    return 'Comment(author: $author, channelId: $channelId, text: $text, likeCount: $likeCount, publishedTime: $publishedTime, replyCount: $replyCount, isHearted: $isHearted, continuation: $continuation)';
+    return 'Comment(author: $author, channelId: $channelId, text: $text, likeCount: $likeCount, publishedTime: $publishedTime, replyCount: $replyCount, isHearted: $isHearted, continuation: $continuation, authorAvatarUrl: $authorAvatarUrl)';
   }
 }
 
@@ -267,7 +526,8 @@ abstract mixin class _$CommentCopyWith<$Res> implements $CommentCopyWith<$Res> {
       String publishedTime,
       int replyCount,
       bool isHearted,
-      @internal String? continuation});
+      @internal String? continuation,
+      String? authorAvatarUrl});
 
   @override
   $ChannelIdCopyWith<$Res> get channelId;
@@ -293,6 +553,7 @@ class __$CommentCopyWithImpl<$Res> implements _$CommentCopyWith<$Res> {
     Object? replyCount = null,
     Object? isHearted = null,
     Object? continuation = freezed,
+    Object? authorAvatarUrl = freezed,
   }) {
     return _then(_Comment(
       null == author
@@ -326,6 +587,10 @@ class __$CommentCopyWithImpl<$Res> implements _$CommentCopyWith<$Res> {
       freezed == continuation
           ? _self.continuation
           : continuation // ignore: cast_nullable_to_non_nullable
+              as String?,
+      freezed == authorAvatarUrl
+          ? _self.authorAvatarUrl
+          : authorAvatarUrl // ignore: cast_nullable_to_non_nullable
               as String?,
     ));
   }

@@ -41,6 +41,7 @@ class CommentsClient {
               e.repliesCount ?? 0,
               e.isHearted,
               e.continuation,
+              e.channelThumbnail,
             ),
           )
           .toList(growable: false),
@@ -78,6 +79,7 @@ class CommentsClient {
               e.repliesCount ?? 0,
               e.isHearted,
               e.continuation,
+              e.channelThumbnail,
             ),
           )
           .toList(growable: false),

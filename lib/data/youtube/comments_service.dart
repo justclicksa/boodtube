@@ -39,7 +39,7 @@ class CommentsService {
                 id: '${c.channelId.value}_${c.text.hashCode}',
                 author: c.author,
                 authorChannelId: c.channelId.value,
-                authorAvatarUrl: null, // FIXED: not in Comment
+                authorAvatarUrl: c.authorAvatarUrl,
                 content: c.text,
                 // FIXED: publishedTime is String, not DateTime
                 // Convert "2 years ago" -> DateTime
