@@ -40,6 +40,13 @@ typedef HistoryEntry = ({MediaItem item, int? percentWatched});
 typedef GuideEntry = ({String title, String browseId, String? iconType});
 
 /// One page of a feed plus the continuation that fetches the next one.
+/// One page of a feed plus the continuation that fetches the next one.
+///
+/// There is deliberately no reload token here. YouTube's own
+/// pull-to-refresh sends reloadContinuationData, but the TV surface's
+/// response does not carry one — measured on device, and asking for
+/// FEwhat_to_watch again just returns the set already cached for the
+/// account. Refreshing continues the feed instead.
 typedef FeedPage = ({List<MediaItem> items, String? continuation});
 
 typedef LiveChatPage = ({
@@ -234,7 +241,10 @@ class AuthenticatedInnerTubeClient {
     final videos = _extractVideos(data);
     debugPrint('InnerTube subscriptions: ${videos.length} videos '
         '(response keys: ${data.keys.take(8).join(",")})');
-    return (items: videos, continuation: _continuationToken(data));
+    return (
+      items: videos,
+      continuation: _continuationToken(data),
+    );
   }
 
   /// The personalised home feed.
@@ -273,9 +283,10 @@ class AuthenticatedInnerTubeClient {
     if (data == null) return null;
     return (
       items: _extractVideos(data),
-      continuation: _continuationToken(data)
+      continuation: _continuationToken(data),
     );
   }
+
 
   /// The token that fetches the next page of a feed, wherever YouTube
   /// happens to have put it in this response shape.
@@ -455,7 +466,10 @@ class AuthenticatedInnerTubeClient {
     if (data == null) return null;
     final videos = _extractVideos(data);
     debugPrint('InnerTube browse $browseId: ${videos.length} videos');
-    return (items: videos, continuation: _continuationToken(data));
+    return (
+      items: videos,
+      continuation: _continuationToken(data),
+    );
   }
 
   /// Search, through InnerTube rather than by scraping the results page.
@@ -483,7 +497,10 @@ class AuthenticatedInnerTubeClient {
     if (data == null) return null;
     final videos = _extractVideos(data);
     debugPrint('InnerTube search "$query": ${videos.length} videos');
-    return (items: videos, continuation: _continuationToken(data));
+    return (
+      items: videos,
+      continuation: _continuationToken(data),
+    );
   }
 
   /// The channels the user actually subscribes to on YouTube.

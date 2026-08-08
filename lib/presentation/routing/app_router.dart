@@ -45,6 +45,14 @@ final playerRouteActiveProvider = StateProvider<bool>((ref) => false);
 /// player surface, so the same image carries through every transition.
 String playerHeroTag(String videoId) => 'player-surface-$videoId';
 
+/// Bumped when the tab you are already on is tapped again.
+///
+/// Returning the branch to its root is only half of what every tabbed
+/// app does — the other half is jumping the visible list back to the
+/// top, and only the screen owns its scroll position. It listens for
+/// this instead of the shell reaching into it.
+final tabReselectedProvider = StateProvider<int>((ref) => 0);
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
@@ -243,12 +251,18 @@ class MainShell extends ConsumerWidget {
         selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: (index) {
           HapticFeedback.selectionClick();
+          final reselected = index == navigationShell.currentIndex;
           navigationShell.goBranch(
             index,
             // Tapping the active tab returns it to its root, the way
             // every tabbed app on both platforms behaves.
-            initialLocation: index == navigationShell.currentIndex,
+            initialLocation: reselected,
           );
+          // …and sends the visible list back to the top, which is the
+          // half of that gesture the router cannot do by itself.
+          if (reselected) {
+            ref.read(tabReselectedProvider.notifier).state++;
+          }
         },
         destinations: [
           NavigationDestination(

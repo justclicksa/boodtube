@@ -291,10 +291,19 @@ class HomeFeedNotifier extends AutoDisposeAsyncNotifier<PagedFeed> {
     // Always ask the authenticated client first: it resolves a token
     // from secure storage itself and returns null when signed out, so
     // this does not depend on the sign-in state having been restored.
-    final page = await ref.watch(authenticatedClientProvider).getHomeFeedPage();
+    final resume = ref.read(homeResumeTokenProvider);
+    final client = ref.watch(authenticatedClientProvider);
+    var page = await client.getHomeFeedPage(continuation: resume);
+    if (resume != null && (page == null || page.items.isEmpty)) {
+      // A spent token is worse than none: an empty home screen is a
+      // heavier failure than showing the first page twice.
+      ref.read(homeResumeTokenProvider.notifier).state = null;
+      page = await client.getHomeFeedPage();
+    }
     if (page != null && page.items.isNotEmpty) {
       _viaAccount = true;
       _continuation = page.continuation;
+      ref.read(homeResumeTokenProvider.notifier).state = page.continuation;
       return PagedFeed(
         items: await _prepare(ref, _fresh(page.items), _surface),
         hasMore: _continuation != null,
@@ -331,6 +340,12 @@ class HomeFeedNotifier extends AutoDisposeAsyncNotifier<PagedFeed> {
           .read(authenticatedClientProvider)
           .getHomeFeedPage(continuation: continuation);
       _continuation = page?.continuation;
+      // Scrolling moves the resume point too, so a pull continues from
+      // where reading stopped rather than from where the session began.
+      final next = page?.continuation;
+      if (next != null) {
+        ref.read(homeResumeTokenProvider.notifier).state = next;
+      }
       return page?.items;
     }
 
@@ -348,6 +363,21 @@ class HomeFeedNotifier extends AutoDisposeAsyncNotifier<PagedFeed> {
     return null;
   }
 }
+
+/// Where the home feed resumes on the next pull-to-refresh.
+///
+/// Asking YouTube for FEwhat_to_watch again returns the set it has
+/// already cached for this account, so a refresh gave back exactly the
+/// same videos. Its own reload token — what the official app sends —
+/// is not in the TV surface's response at all; that was measured and it
+/// changed nothing.
+///
+/// So a pull continues the feed instead of restarting it, which is what
+/// the user actually wanted from the gesture: videos they have not seen
+/// yet. It is not a reload, and the distinction is worth keeping in
+/// mind — the top of the feed is only reachable again by reopening the
+/// app, or by whatever clears this token.
+final homeResumeTokenProvider = StateProvider<String?>((ref) => null);
 
 /// Home, paginated. Screens read `.items` / `.hasMore` and call
 /// `ref.read(homeFeedPagedProvider.notifier).loadMore()`.
