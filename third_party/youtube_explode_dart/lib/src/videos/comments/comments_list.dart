@@ -26,12 +26,14 @@ class CommentsList extends BasePagedList<Comment> {
     return CommentsList(
       page.comments!
           .map(
+            // BOODTUBE PATCH: unreadable comments are dropped by the
+            // parser, so these three are known present by this point.
             (e) => Comment(
-              e.author,
-              ChannelId(e.channelId),
-              e.text,
+              e.author!,
+              ChannelId(e.channelId!),
+              e.text!,
               e.likeCount ?? 0,
-              e.publishTime,
+              e.publishTime ?? '',
               e.repliesCount ?? 0,
               e.isHearted,
               e.continuation,
