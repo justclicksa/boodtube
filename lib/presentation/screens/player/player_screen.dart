@@ -39,6 +39,7 @@ import '../../providers/repository_providers.dart';
 import '../../providers/settings_providers.dart';
 import '../../routing/app_router.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/download_quality_sheet.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/video_card.dart';
 import '../comments/comments_screen.dart';
@@ -818,6 +819,8 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
                 // from a pulled video from a rate limit.
                 error: switch (state.error) {
                   'stream-capped' => AppLocalizations.of(context).streamCapped,
+                  'download-removed' =>
+                    AppLocalizations.of(context).downloadGone,
                   final String e when e.contains('live-unavailable') =>
                     AppLocalizations.of(context).liveUnavailable,
                   final e => e!,
@@ -2413,34 +2416,69 @@ class _DownloadPill extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final progress = download.value;
-    final label = switch (progress?.status) {
-      DownloadStatus.downloading =>
-        l10n.percentValue(((progress?.progress ?? 0) * 100).round()),
+    // The in-flight map is memory only: after a restart the pill has to
+    // ask the database, or an already-downloaded video offers "Download"
+    // again and the tap is silently ignored.
+    final saved = ref.watch(isDownloadedProvider(item.videoId)).value ?? false;
+    final status = saved && progress == null
+        ? DownloadStatus.completed
+        : progress?.status;
+
+    final label = switch (status) {
+      DownloadStatus.queued => l10n.downloadQueued,
+      DownloadStatus.downloading => progress?.progress == null
+          ? l10n.downloadQueued
+          : l10n.percentValue((progress!.progress! * 100).round()),
+      DownloadStatus.paused => l10n.downloadPaused,
       DownloadStatus.completed => l10n.downloaded,
       DownloadStatus.failed => l10n.retry,
-      _ => l10n.download,
+      null => l10n.download,
     };
-    final icon = switch (progress?.status) {
+    final icon = switch (status) {
+      DownloadStatus.queued => Icons.schedule,
       DownloadStatus.downloading => Icons.downloading,
+      DownloadStatus.paused => Icons.pause_circle_outline,
       DownloadStatus.completed => Icons.download_done,
       DownloadStatus.failed => Icons.error_outline,
-      _ => Icons.download_outlined,
+      null => Icons.download_outlined,
     };
 
     return _ActionPill(
       icon: icon,
       label: label,
       onTap: () async {
-        if (progress?.status == DownloadStatus.completed) {
-          context.push('/downloads');
-          return;
+        final controller = ref.read(downloadsControllerProvider.notifier);
+        switch (status) {
+          case DownloadStatus.completed:
+            context.push('/downloads');
+          case DownloadStatus.downloading:
+          case DownloadStatus.queued:
+            await controller.pause(item.videoId);
+          case DownloadStatus.paused:
+          case DownloadStatus.failed:
+            // Both keep a partial file; both continue from it rather
+            // than spending the bytes again.
+            await controller.resume(item);
+          case null:
+            await _start(context, ref, l10n);
         }
-        final messenger = ScaffoldMessenger.of(context);
-        await ref.read(downloadsControllerProvider.notifier).download(item);
-        messenger.showSnackBar(
-          SnackBar(content: Text(l10n.downloadStarted)),
-        );
       },
     );
+  }
+
+  /// Quality is a lasting choice for a download — it costs storage and
+  /// can only be changed by downloading again — so it is asked first.
+  Future<void> _start(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final choice = await showDownloadQualitySheet(context, item.videoId);
+    if (choice == null) return;
+    await ref
+        .read(downloadsControllerProvider.notifier)
+        .download(item, height: choice.height);
+    messenger.showSnackBar(SnackBar(content: Text(l10n.downloadStarted)));
   }
 }

@@ -56,6 +56,12 @@ class AppDatabase extends _$AppDatabase {
         .watch();
   }
 
+  Future<List<DownloadTableData>> getDownloads() {
+    return (select(downloadsTable)
+          ..orderBy([(t) => OrderingTerm.desc(t.downloadedAt)]))
+        .get();
+  }
+
   Future<DownloadTableData?> getDownload(String videoId) {
     return (select(downloadsTable)..where((t) => t.videoId.equals(videoId)))
         .getSingleOrNull();

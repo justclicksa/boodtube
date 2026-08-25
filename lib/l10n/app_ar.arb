@@ -596,5 +596,29 @@
   "defaultSubtitleLanguageSubtitle": "تفعيل الترجمة تلقائيًا بهذه اللغة",
   "subtitleLanguageAppDefault": "لغة التطبيق",
   "adaptiveStreaming": "البث التكيفي (DASH)",
-  "adaptiveStreamingSubtitle": "تجريبي: ترك المشغل يدمج الفيديو والصوت بنفسه"
+  "adaptiveStreamingSubtitle": "تجريبي: ترك المشغل يدمج الفيديو والصوت بنفسه",
+  "downloadQuality": "Ø¬ÙØ¯Ø© Ø§ÙØªÙØ²ÙÙ",
+  "downloadQueued": "ÙÙ Ø§ÙØ§ÙØªØ¸Ø§Ø±",
+  "downloadPaused": "ÙÙÙÙ ÙØ¤ÙØªÙØ§",
+  "pauseDownload": "Ø¥ÙÙØ§Ù ÙØ¤ÙØª",
+  "resumeDownload": "ÙØªØ§Ø¨Ø¹Ø©",
+  "deleteDownload": "Ø­Ø°Ù Ø§ÙØªÙØ²ÙÙ",
+  "deleteDownloadConfirm": "Ø¥Ø²Ø§ÙØ© ÙØ°Ø§ Ø§ÙÙÙØ·Ø¹ ÙÙ Ø¬ÙØ§Ø²ÙØ ÙÙÙÙÙ ØªÙØ²ÙÙÙ ÙØ±Ø© Ø£Ø®Ø±Ù ÙØ§Ø­ÙÙØ§.",
+  "downloadRemoved": "ØªÙ Ø­Ø°Ù Ø§ÙØªÙØ²ÙÙ",
+  "downloadFailedNetwork": "Ø§ÙÙØ·Ø¹ Ø§ÙØ§ØªØµØ§Ù Ø£Ø«ÙØ§Ø¡ Ø§ÙØªÙØ²ÙÙ",
+  "downloadFailedStorage": "ÙØ§ ØªÙØ¬Ø¯ ÙØ³Ø§Ø­Ø© ÙØ§ÙÙØ© Ø¹ÙÙ Ø§ÙØ¬ÙØ§Ø²",
+  "downloadFailedCapped": "ØªÙÙÙØª YouTube Ø¹Ù Ø¥Ø±Ø³Ø§Ù ÙØ°Ø§ Ø§ÙÙÙØ·Ø¹. Ø¬Ø±ÙØ¨ Ø¬ÙØ¯Ø© Ø£ÙÙ.",
+  "downloadFailedUnavailable": "ÙØ§ ÙÙÙÙ ØªÙØ²ÙÙ ÙØ°Ø§ Ø§ÙÙÙØ·Ø¹",
+  "downloadFailedUnknown": "ÙØ´Ù Ø§ÙØªÙØ²ÙÙ",
+  "storageUsed": "{size} ÙØ³ØªØ®Ø¯ÙØ© ÙÙØªÙØ²ÙÙØ§Øª",
+  "downloadProgressDetail": "{done} ÙÙ {total}",
+  "transferRate": "{rate}/Ø«",
+  "sortBy": "Ø§ÙØªØ±ØªÙØ¨",
+  "sortNewest": "Ø§ÙØ£Ø­Ø¯Ø« Ø£ÙÙÙØ§",
+  "sortOldest": "Ø§ÙØ£ÙØ¯Ù Ø£ÙÙÙØ§",
+  "sortLargest": "Ø§ÙØ£ÙØ¨Ø± Ø­Ø¬ÙÙØ§",
+  "sortTitle": "Ø§ÙØ¹ÙÙØ§Ù",
+  "offlineQuality": "Ø¯ÙÙ Ø§ØªØµØ§Ù",
+  "offlineQualityNotice": "ØªØ´ØºÙÙ Ø§ÙÙØ³Ø®Ø© Ø§ÙÙÙØ²ÙÙØ©. Ø®ÙØ§Ø±Ø§Øª Ø§ÙØ¬ÙØ¯Ø© ØªØ­ØªØ§Ø¬ Ø¥ÙÙ Ø§ØªØµØ§Ù.",
+  "downloadGone": "ÙÙ ÙØ¹Ø¯ ÙØ°Ø§ Ø§ÙØªÙØ²ÙÙ ÙÙØ¬ÙØ¯ÙØ§ Ø¹ÙÙ Ø§ÙØ¬ÙØ§Ø²"
 }

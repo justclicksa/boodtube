@@ -1332,4 +1332,85 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get adaptiveStreamingSubtitle =>
       'Experimental: let the player combine video and audio itself';
+
+  @override
+  String get downloadQuality => 'Download quality';
+
+  @override
+  String get downloadQueued => 'Queued';
+
+  @override
+  String get downloadPaused => 'Paused';
+
+  @override
+  String get pauseDownload => 'Pause';
+
+  @override
+  String get resumeDownload => 'Resume';
+
+  @override
+  String get deleteDownload => 'Delete download';
+
+  @override
+  String get deleteDownloadConfirm =>
+      'Remove this video from your device? You can download it again later.';
+
+  @override
+  String get downloadRemoved => 'Download deleted';
+
+  @override
+  String get downloadFailedNetwork => 'Connection lost during the download';
+
+  @override
+  String get downloadFailedStorage => 'Not enough space on this device';
+
+  @override
+  String get downloadFailedCapped =>
+      'YouTube stopped serving this video. Try a lower quality.';
+
+  @override
+  String get downloadFailedUnavailable => 'This video can\'t be downloaded';
+
+  @override
+  String get downloadFailedUnknown => 'Download failed';
+
+  @override
+  String storageUsed(String size) {
+    return '$size used by downloads';
+  }
+
+  @override
+  String downloadProgressDetail(String done, String total) {
+    return '$done of $total';
+  }
+
+  @override
+  String transferRate(String rate) {
+    return '$rate/s';
+  }
+
+  @override
+  String get sortBy => 'Sort';
+
+  @override
+  String get sortNewest => 'Newest first';
+
+  @override
+  String get sortOldest => 'Oldest first';
+
+  @override
+  String get sortLargest => 'Largest first';
+
+  @override
+  String get sortTitle => 'Title';
+
+  @override
+  String get offlineQuality => 'Offline';
+
+  @override
+  String get offlineQualityNotice =>
+      'Playing your downloaded copy. Quality options need a connection.';
+
+  @override
+  String get downloadGone => 'This download is no longer on the device';
 }

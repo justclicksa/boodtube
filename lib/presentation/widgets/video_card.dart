@@ -25,6 +25,7 @@ import '../providers/local_library_providers.dart';
 import '../providers/player_providers.dart';
 import '../providers/settings_providers.dart';
 import '../theme/app_theme.dart';
+import 'download_quality_sheet.dart';
 
 /// Minimum touch target. Anything smaller is a miss waiting to happen,
 /// and fails the platform accessibility guidance on both stores.
@@ -418,12 +419,26 @@ class _VideoMenu extends ConsumerWidget {
             _MenuRow(
               icon: Icons.download_outlined,
               label: l10n.download,
-              onTap: () {
-                ref.read(downloadManagerProvider).download(item);
-                ScaffoldMessenger.of(context).showSnackBar(
+              // Quality is asked before the transfer starts rather than
+              // defaulted to 720p out of sight: a download is storage
+              // spent, and re-choosing means spending it again.
+              //
+              // The sheet is stacked on top of this menu rather than
+              // replacing it: dismissing the quality list lands back
+              // here, and this menu's context is still mounted when the
+              // choice comes back.
+              onTap: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final controller =
+                    ref.read(downloadsControllerProvider.notifier);
+                final choice =
+                    await showDownloadQualitySheet(context, item.videoId);
+                if (choice == null) return;
+                if (context.mounted) close();
+                await controller.download(item, height: choice.height);
+                messenger.showSnackBar(
                   SnackBar(content: Text(l10n.downloadStarted)),
                 );
-                close();
               },
             ),
             _MenuRow(
