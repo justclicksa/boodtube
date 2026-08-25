@@ -90,7 +90,7 @@ class ContentFilter {
 
   bool _keep(MediaItem item, ContentSurface surface) {
     if (_isBlocked(item)) return false;
-    if (_isShorts(item) && hidden.contains(_shortsRuleFor(surface))) {
+    if (isShorts(item) && hidden.contains(_shortsRuleFor(surface))) {
       return false;
     }
     if (item.isUpcoming && hidden.contains(_upcomingRuleFor(surface))) {
@@ -121,7 +121,11 @@ class ContentFilter {
   /// SmartTube's heuristic: YouTube tags sub-minute clips itself, so
   /// anything up to 90s counts, and up to 3 minutes when the title
   /// carries a hashtag.
-  static bool _isShorts(MediaItem item) {
+  ///
+  /// Public because autoplay needs the same answer: continuing a watch
+  /// session with a Short is jarring, and the two places must agree on
+  /// what a Short is.
+  static bool isShorts(MediaItem item) {
     if (item.isShorts) return true;
     final ms = item.duration.inMilliseconds;
     if (ms <= 0) return false;

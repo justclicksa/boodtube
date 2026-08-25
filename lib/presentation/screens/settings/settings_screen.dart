@@ -227,6 +227,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           _SettingsRow(
+            keywords: [
+              l10n.skipShortsInAutoplay,
+              l10n.skipShortsInAutoplaySubtitle,
+            ],
+            widget: SwitchListTile(
+              secondary: const Icon(Icons.bolt_outlined),
+              title: Text(l10n.skipShortsInAutoplay),
+              subtitle: Text(l10n.skipShortsInAutoplaySubtitle),
+              value: settings.skipShortsInAutoplay,
+              onChanged: controller.setSkipShortsInAutoplay,
+            ),
+          ),
+          _SettingsRow(
             keywords: [l10n.autoQuality, l10n.autoQualitySubtitle],
             widget: SwitchListTile(
               secondary: const Icon(Icons.hd),

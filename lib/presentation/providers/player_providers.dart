@@ -3,6 +3,7 @@
 // ============================================================
 
 import 'dart:async';
+import 'dart:math';
 
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/widgets.dart';
@@ -12,6 +13,7 @@ import 'package:media_kit/media_kit.dart';
 import '../../data/youtube/stream_resolver.dart';
 import '../../data/local/preferences/settings_repository_impl.dart';
 import '../../core/errors/exceptions.dart';
+import '../../domain/entities/content_filter.dart';
 import '../../domain/entities/media_item.dart';
 import '../../domain/entities/media_subtitle.dart';
 import '../../domain/entities/sponsor_segment.dart';
@@ -29,11 +31,17 @@ final audioHandlerProvider = Provider<SmartTubeAudioHandler>(
 );
 
 /// What happens when the video reaches the end. Mirrors SmartTube's
-/// "Playback mode" list, minus the playlist-only modes this app has no
-/// queue for yet.
+/// "Playback mode" list (VideoLoaderController's PLAYBACK_MODE_*).
+///
+/// * [none] — play the queue through, then YouTube's "Up next".
+/// * [one] — repeat the video that just finished.
+/// * [all] — loop the queue: the finished video goes back on the end.
+/// * [shuffle] — like [all], but the next video is drawn at random.
+/// * [pause] — stop at the end of every video.
+///
 /// Display strings for both enums live in
 /// presentation/l10n/enum_labels.dart so they can be translated.
-enum RepeatMode { none, one, pause }
+enum RepeatMode { none, one, all, shuffle, pause }
 
 /// How the video fills the player surface — SmartTube's "Video zoom".
 enum VideoFit { fit, fitWidth, fitHeight, stretch, zoom }
@@ -127,6 +135,9 @@ class PlayerStateData {
     this.seekInterval = const Duration(seconds: 10),
     this.volume = 100,
     this.queue = const [],
+    this.upNext,
+    this.upNextCountdown,
+    this.showReplay = false,
     this.pendingHeight,
     this.sourceClient,
     this.failedClients = const [],
@@ -170,6 +181,22 @@ class PlayerStateData {
   /// Videos queued to play after this one.
   final List<MediaItem> queue;
 
+  /// The video autoplay is about to continue with, while the "Up next"
+  /// card counts down. Null whenever no such offer is on screen.
+  final MediaItem? upNext;
+
+  /// Seconds left before [upNext] loads. Null when no countdown is
+  /// running; zero for the tick that fires it.
+  final int? upNextCountdown;
+
+  /// Playback finished and nothing followed it — either autoplay is off,
+  /// nothing eligible was suggested, or the user cancelled the countdown.
+  /// The surface answers with a replay button.
+  final bool showReplay;
+
+  /// Whether the "Up next" card should be on screen.
+  bool get isUpNextPending => upNext != null && (upNextCountdown ?? 0) > 0;
+
   /// The resolution a quality switch is currently reaching for. Set the
   /// moment the user taps, so the menu and the loading label reflect the
   /// choice instead of appearing to have ignored it.
@@ -211,6 +238,9 @@ class PlayerStateData {
     Duration? seekInterval,
     double? volume,
     List<MediaItem>? queue,
+    MediaItem? upNext,
+    int? upNextCountdown,
+    bool? showReplay,
     int? pendingHeight,
     String? sourceClient,
     List<String>? failedClients,
@@ -227,6 +257,7 @@ class PlayerStateData {
     bool clearSleepTimer = false,
     bool clearSubtitle = false,
     bool clearPendingHeight = false,
+    bool clearUpNext = false,
     bool clearFallbackReason = false,
     bool clearDiagnostics = false,
     bool clearAudioTrack = false,
@@ -260,6 +291,10 @@ class PlayerStateData {
       seekInterval: seekInterval ?? this.seekInterval,
       volume: volume ?? this.volume,
       queue: queue ?? this.queue,
+      upNext: clearUpNext ? null : (upNext ?? this.upNext),
+      upNextCountdown:
+          clearUpNext ? null : (upNextCountdown ?? this.upNextCountdown),
+      showReplay: showReplay ?? this.showReplay,
       pendingHeight:
           clearPendingHeight ? null : (pendingHeight ?? this.pendingHeight),
       sourceClient:
@@ -315,6 +350,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
       ..add(_player.stream.position.listen((pos) {
         state = state.copyWith(position: pos);
         _checkSponsorSegment(pos);
+        _maybePreloadNext(pos);
       }))
       ..add(_player.stream.duration.listen((dur) {
         state = state.copyWith(duration: dur);
@@ -341,7 +377,11 @@ class PlayerController extends StateNotifier<PlayerStateData>
         // Frames are arriving, so whatever was reported earlier did not
         // stop playback.
         state = playing
-            ? state.copyWith(isPlaying: true, clearError: true)
+            ? state.copyWith(
+                isPlaying: true,
+                clearError: true,
+                showReplay: false,
+              )
             : state.copyWith(isPlaying: false);
         if (playing) unawaited(_claimAudioSession());
       }))
@@ -361,6 +401,28 @@ class PlayerController extends StateNotifier<PlayerStateData>
   Timer? _savePositionTimer;
   Timer? _sleepTimer;
   Timer? _bufferRecoveryTimer;
+  Timer? _upNextTimer;
+
+  /// Videos played before this one, most recent last. Drives "previous".
+  final List<MediaItem> _history = [];
+
+  /// Metadata fetched ahead of time for the video that is going to play
+  /// next, so `loadVideo` can skip the round-trip. Consumed once.
+  MediaItem? _preloadedItem;
+
+  /// The video whose tail already triggered a prefetch, so the position
+  /// stream does not fire one per frame.
+  String? _preloadedFor;
+
+  /// Related lists already fetched, so the autoplay candidate and the
+  /// "Up next" card do not each pay for the request.
+  final Map<String, List<MediaItem>> _relatedCache = {};
+
+  /// Held open so `relatedVideosProvider` — which is autoDispose — stays
+  /// warm for the suggestions list while the video plays.
+  ProviderSubscription<AsyncValue<List<MediaItem>>>? _relatedWarm;
+
+  final Random _random = Random();
   bool _recoveringPlayback = false;
 
   /// Guards against a second quality switch starting while the first is
@@ -397,18 +459,47 @@ class PlayerController extends StateNotifier<PlayerStateData>
 
   Future<void> _onCompleted(bool completed) async {
     if (!completed) return;
+    final finished = state.currentItem;
     switch (state.repeatMode) {
       case RepeatMode.one:
         await _player.seek(Duration.zero);
         await _player.play();
+      case RepeatMode.all:
+      case RepeatMode.shuffle:
+        await _saveCurrentPosition();
+        // The pick is made against the queue as it stands, and only then
+        // does the finished video go back on the end — otherwise shuffle
+        // could draw the video that just played.
+        final choice = selectNext(
+          state.queue,
+          mode: state.repeatMode,
+          skipShorts: _skipShorts,
+          pickRandom: _random.nextInt,
+        );
+        if (choice != null) {
+          _setQueue([
+            ...choice.rest.where((q) => q.videoId != finished?.videoId),
+            if (finished != null) finished,
+          ]);
+          await loadVideo(choice.next.videoId);
+          return;
+        }
+        // Nothing else is queued, so looping means this one video again.
+        if (finished != null) {
+          await _player.seek(Duration.zero);
+          await _player.play();
+          return;
+        }
+        await _offerRelated();
       case RepeatMode.none:
         await _saveCurrentPosition();
         // Continue with whatever the user queued up, then with YouTube's
         // own "Up next" when the queue is empty and autoplay is on.
-        if (await playNextInQueue()) return;
-        await _playRelatedIfEnabled();
+        if (await playNextInQueue(autoplay: true)) return;
+        await _offerRelated();
       case RepeatMode.pause:
         await _saveCurrentPosition();
+        state = state.copyWith(showReplay: true);
     }
   }
 
@@ -450,7 +541,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
 
   /// Loads a video: metadata, streams, then hands the URLs to mpv through
   /// the local proxy.
-  Future<void> loadVideo(String videoId) async {
+  Future<void> loadVideo(String videoId, {bool recordHistory = true}) async {
     // Re-opening the player for the video already loaded — coming back
     // from the mini player — must not tear down a running stream and
     // re-fetch metadata for it. mpv is already sitting on the right
@@ -462,6 +553,15 @@ class PlayerController extends StateNotifier<PlayerStateData>
       return;
     }
 
+    // Whatever was on screen — an "Up next" offer, the ended card —
+    // belongs to the video being replaced.
+    _cancelUpNextTimer();
+
+    final leaving = state.currentItem;
+    if (recordHistory && leaving != null && leaving.videoId != videoId) {
+      _pushHistory(leaving);
+    }
+
     // Draw the page from what the tapped card already knew — title,
     // thumbnail, channel, duration — so only the video is waited on
     // rather than the whole screen. Replaced by the full item below.
@@ -471,28 +571,45 @@ class PlayerController extends StateNotifier<PlayerStateData>
       clearError: true,
       clearDiagnostics: true,
       currentItem: seed ?? state.currentItem,
+      clearUpNext: true,
+      showReplay: false,
     );
     _cpn = HistorySync.newCpn();
     // Caps are recorded per video; a new one starts with a clean slate.
     _cappedHeights.clear();
+    _preloadedFor = null;
 
     try {
       final sw = Stopwatch()..start();
-      debugPrint('loadVideo[$videoId]: fetching metadata...');
+      // Prefetched during the tail of the previous video, so the usual
+      // couple of seconds of metadata round-trip is already paid for.
+      final preloaded =
+          _preloadedItem?.videoId == videoId ? _preloadedItem : null;
+      _preloadedItem = null;
+      if (preloaded != null) {
+        debugPrint('loadVideo[$videoId]: metadata came from the prefetch');
+      } else {
+        debugPrint('loadVideo[$videoId]: fetching metadata...');
+      }
       final repo = _ref.read(mediaItemRepositoryProvider);
-      final item = await retryPlaybackOperation(
-        () async {
-          final result = await repo
-              .getMediaItem(videoId)
-              .timeout(const Duration(seconds: 25));
-          return result.when(
-            success: (item) => item,
-            failure: (message, type, cause) =>
-                throw Failure(message, type: type, cause: cause),
+      final item = preloaded ??
+          await retryPlaybackOperation<MediaItem>(
+            () async {
+              final result = await repo
+                  .getMediaItem(videoId)
+                  .timeout(const Duration(seconds: 25));
+              return result.when(
+                success: (item) => item,
+                failure: (message, type, cause) =>
+                    throw Failure(message, type: type, cause: cause),
+              );
+            },
+            shouldRetry: isRetryablePlaybackError,
           );
-        },
-        shouldRetry: isRetryablePlaybackError,
-      );
+
+      // Suggestions are wanted by the watch page and by autoplay alike;
+      // starting it here means neither waits for it later.
+      _warmRelated(videoId);
 
       // Carry the cause, not a sentence about it. Stringifying here left
       // the watch page with nothing to classify, so every failure —
@@ -955,37 +1072,281 @@ class PlayerController extends StateNotifier<PlayerStateData>
   void _syncSkipControls() {
     final handler = _ref.read(audioHandlerProvider);
     handler.onSkipNext = state.queue.isEmpty ? null : playNextInQueue;
+    // "Previous" restarts the current video most of the time, but the
+    // button is only worth showing once there is somewhere to go back to.
+    handler.onSkipPrevious = _history.isEmpty ? null : skipPrevious;
     handler.refreshControls();
   }
 
-  /// Starts the next queued video, removing it from the queue.
-  Future<bool> playNextInQueue() async {
-    if (state.queue.isEmpty) return false;
-    final next = state.queue.first;
-    _setQueue(state.queue.skip(1).toList());
-    await loadVideo(next.videoId);
+  /// Which queued video plays next, and what is left of the queue.
+  ///
+  /// Pure so the three rules that matter — order, shuffle, and passing
+  /// over Shorts — can be tested without a player. Skipped Shorts stay
+  /// in the queue: the user put them there deliberately and can still
+  /// play them by hand; autoplay just never lands on one.
+  static ({MediaItem next, List<MediaItem> rest})? selectNext(
+    List<MediaItem> queue, {
+    RepeatMode mode = RepeatMode.none,
+    bool skipShorts = false,
+    int Function(int max)? pickRandom,
+  }) {
+    final eligible = skipShorts
+        ? queue.where((item) => !isAutoplayShort(item)).toList()
+        : queue;
+    if (eligible.isEmpty) return null;
+    final pick = pickRandom ?? _firstIndex;
+    final next = mode == RepeatMode.shuffle && eligible.length > 1
+        ? eligible[pick(eligible.length) % eligible.length]
+        : eligible.first;
+    return (
+      next: next,
+      rest: queue.where((item) => item.videoId != next.videoId).toList(),
+    );
+  }
+
+  static int _firstIndex(int max) => 0;
+
+  /// A Short by the same rule the feeds use, so "skip Shorts" means the
+  /// same thing in autoplay as it does in "Hide content".
+  static bool isAutoplayShort(MediaItem item) => ContentFilter.isShorts(item);
+
+  bool get _skipShorts =>
+      _ref.read(settingsControllerProvider).skipShortsInAutoplay;
+
+  /// Starts the next queued video, removing it from the queue. [autoplay]
+  /// marks the automatic continuation, which is the only case that passes
+  /// over Shorts — an explicit "next" plays whatever the user asked for.
+  Future<bool> playNextInQueue({bool autoplay = false}) async {
+    final choice = selectNext(
+      state.queue,
+      mode: state.repeatMode,
+      skipShorts: autoplay && _skipShorts,
+      pickRandom: _random.nextInt,
+    );
+    if (choice == null) return false;
+    _setQueue(choice.rest);
+    await loadVideo(choice.next.videoId);
     return true;
   }
 
-  /// Autoplay: continues with the first related video that is not the
-  /// one just finished. Silent when the setting is off, the video was
-  /// live, or the related list failed to load.
-  Future<void> _playRelatedIfEnabled() async {
+  // ============================================================
+  // "Up next" — the countdown before autoplay takes over
+  // ============================================================
+
+  /// How long the "Up next" card waits before loading, matching
+  /// SmartTube's `loadNextVideo(5_000)`.
+  static const upNextSeconds = 5;
+
+  static PlayerStateData beginUpNext(PlayerStateData state, MediaItem next) =>
+      state.copyWith(
+        upNext: next,
+        upNextCountdown: upNextSeconds,
+        showReplay: false,
+      );
+
+  /// One second of the countdown. A result of zero means the wait is
+  /// over and the video should load.
+  static PlayerStateData tickUpNext(PlayerStateData state) {
+    final remaining = (state.upNextCountdown ?? 0) - 1;
+    return state.copyWith(upNextCountdown: remaining < 0 ? 0 : remaining);
+  }
+
+  /// The user declined: the offer goes away and the ended screen with
+  /// its replay button stays.
+  static PlayerStateData cancelUpNextState(PlayerStateData state) =>
+      state.copyWith(clearUpNext: true, showReplay: true);
+
+  /// Autoplay: offers the first eligible related video on a countdown
+  /// card rather than cutting straight to it. Silent when the setting is
+  /// off, the video was live, or the related list failed to load — the
+  /// ended screen is shown instead.
+  Future<void> _offerRelated() async {
     final item = state.currentItem;
     if (item == null || item.isLive) return;
-    if (!_ref.read(settingsControllerProvider).autoplayNext) return;
+    if (!_ref.read(settingsControllerProvider).autoplayNext) {
+      state = state.copyWith(showReplay: true);
+      return;
+    }
+    final next = await _relatedCandidate(item);
+    if (next == null) {
+      state = state.copyWith(showReplay: true);
+      return;
+    }
+    debugPrint('autoplay: offering ${next.videoId}');
+    _startUpNextCountdown(next);
+  }
+
+  /// The video autoplay would continue with, or null when nothing
+  /// suitable was suggested.
+  Future<MediaItem?> _relatedCandidate(MediaItem item) async {
     try {
-      final related =
-          await _ref.read(relatedVideosProvider(item.videoId).future);
-      final next = related
-          .where((v) => v.videoId != item.videoId && !v.isLive)
+      final related = await _relatedFor(item.videoId);
+      final skipShorts = _skipShorts;
+      return related
+          .where((v) =>
+              v.videoId != item.videoId &&
+              !v.isLive &&
+              !v.isUpcoming &&
+              !_history.any((played) => played.videoId == v.videoId) &&
+              !(skipShorts && isAutoplayShort(v)))
           .firstOrNull;
-      if (next == null) return;
-      debugPrint('autoplay: continuing with ${next.videoId}');
-      await loadVideo(next.videoId);
     } catch (e) {
       debugPrint('autoplay: related list unavailable: $e');
+      return null;
     }
+  }
+
+  Future<List<MediaItem>> _relatedFor(String videoId) async {
+    final cached = _relatedCache[videoId];
+    if (cached != null) return cached;
+    final related = await _ref.read(relatedVideosProvider(videoId).future);
+    _relatedCache[videoId] = related;
+    return related;
+  }
+
+  /// Keeps `relatedVideosProvider` — autoDispose — alive for the video
+  /// being watched, so the suggestions list and the autoplay candidate
+  /// share one request rather than each paying for it.
+  void _warmRelated(String videoId) {
+    _relatedWarm?.close();
+    _relatedWarm = _ref.listen<AsyncValue<List<MediaItem>>>(
+      relatedVideosProvider(videoId),
+      (_, next) {
+        final items = next.valueOrNull;
+        if (items != null) _relatedCache[videoId] = items;
+      },
+    );
+  }
+
+  void _startUpNextCountdown(MediaItem next) {
+    _cancelUpNextTimer();
+    state = beginUpNext(state, next);
+    // The countdown is exactly the window in which to pay for the next
+    // video's metadata, so the card's "Play now" is instant.
+    unawaited(_prefetchMediaItem(next.videoId));
+    _upNextTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      state = tickUpNext(state);
+      if (state.upNextCountdown == 0) {
+        _cancelUpNextTimer();
+        unawaited(playUpNextNow());
+      }
+    });
+  }
+
+  void _cancelUpNextTimer() {
+    _upNextTimer?.cancel();
+    _upNextTimer = null;
+  }
+
+  /// Dismisses the "Up next" offer and leaves the ended screen up.
+  void cancelUpNext() {
+    _cancelUpNextTimer();
+    state = cancelUpNextState(state);
+  }
+
+  /// Skips the rest of the countdown.
+  Future<void> playUpNextNow() async {
+    final next = state.upNext;
+    _cancelUpNextTimer();
+    state = state.copyWith(clearUpNext: true, showReplay: false);
+    if (next == null) return;
+    await loadVideo(next.videoId);
+  }
+
+  /// Plays the finished video again from the top.
+  Future<void> replay() async {
+    _cancelUpNextTimer();
+    state = state.copyWith(clearUpNext: true, showReplay: false);
+    await _player.seek(Duration.zero);
+    await _player.play();
+  }
+
+  // ============================================================
+  // Preload
+  // ============================================================
+
+  /// Fetches the next video's metadata while the current one plays out
+  /// its last [_preloadWindow]. `loadVideo` consumes it, so the switch
+  /// costs the stream resolve alone.
+  static const _preloadWindow = Duration(seconds: 20);
+
+  void _maybePreloadNext(Duration position) {
+    final item = state.currentItem;
+    final duration = state.duration;
+    if (item == null || item.isLive) return;
+    if (duration <= Duration.zero) return;
+    if (_preloadedFor == item.videoId) return;
+    if (duration - position > _preloadWindow) return;
+    _preloadedFor = item.videoId;
+    unawaited(_prefetchNext(item));
+  }
+
+  Future<void> _prefetchNext(MediaItem current) async {
+    // Shuffle draws its pick at the last moment, so guessing here would
+    // usually prefetch the wrong video; the countdown covers that case.
+    if (state.repeatMode == RepeatMode.shuffle) return;
+    final queued = selectNext(
+      state.queue,
+      mode: state.repeatMode,
+      skipShorts: _skipShorts,
+    )?.next;
+    final next = queued ?? await _relatedCandidate(current);
+    if (next == null) return;
+    await _prefetchMediaItem(next.videoId);
+  }
+
+  Future<void> _prefetchMediaItem(String videoId) async {
+    if (_preloadedItem?.videoId == videoId) return;
+    try {
+      final result =
+          await _ref.read(mediaItemRepositoryProvider).getMediaItem(videoId);
+      final item = result.dataOrNull;
+      if (item != null) {
+        debugPrint('preload: metadata ready for $videoId');
+        _preloadedItem = item;
+      }
+    } catch (e) {
+      debugPrint('preload: $videoId unavailable: $e');
+    }
+  }
+
+  // ============================================================
+  // Previous
+  // ============================================================
+
+  /// How far in a video has to be before "previous" restarts it instead
+  /// of stepping back — the convention every media player shares.
+  static const previousRestartThreshold = Duration(seconds: 5);
+
+  /// Whether "previous" would step back rather than restart.
+  static bool previousGoesBack(Duration position, bool hasHistory) =>
+      hasHistory && position <= previousRestartThreshold;
+
+  void _pushHistory(MediaItem item) {
+    _history
+      ..removeWhere((played) => played.videoId == item.videoId)
+      ..add(item);
+    // A watch session, not a browsing history: enough to walk back
+    // through what autoplay chained together.
+    if (_history.length > 50) _history.removeAt(0);
+    _syncSkipControls();
+  }
+
+  /// The videos played before this one, oldest first.
+  List<MediaItem> get history => List.unmodifiable(_history);
+
+  /// Restarts the current video, or steps back to the previous one when
+  /// barely anything has played.
+  Future<void> skipPrevious() async {
+    if (!previousGoesBack(state.position, _history.isNotEmpty)) {
+      await _player.seek(Duration.zero);
+      state = state.copyWith(position: Duration.zero, showReplay: false);
+      await _player.play();
+      return;
+    }
+    final previous = _history.removeLast();
+    _syncSkipControls();
+    await loadVideo(previous.videoId, recordHistory: false);
   }
 
   /// Rungs used by auto quality. Anything below the floor plays 360p;
@@ -1280,6 +1641,8 @@ class PlayerController extends StateNotifier<PlayerStateData>
     _savePositionTimer?.cancel();
     _sleepTimer?.cancel();
     _bufferRecoveryTimer?.cancel();
+    _upNextTimer?.cancel();
+    _relatedWarm?.close();
     _saveCurrentPosition();
     for (final sub in _subscriptions) {
       sub.cancel();

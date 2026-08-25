@@ -1010,6 +1010,18 @@ abstract class AppLocalizations {
   /// **'Repeat current video'**
   String get repeatOne;
 
+  /// No description provided for @repeatAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Loop the whole queue'**
+  String get repeatAll;
+
+  /// No description provided for @repeatShuffle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shuffle the queue'**
+  String get repeatShuffle;
+
   /// No description provided for @repeatPause.
   ///
   /// In en, this message translates to:
@@ -1027,6 +1039,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Repeat one'**
   String get repeatOneShort;
+
+  /// No description provided for @repeatAllShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat all'**
+  String get repeatAllShort;
+
+  /// No description provided for @repeatShuffleShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Shuffle'**
+  String get repeatShuffleShort;
 
   /// No description provided for @repeatPauseShort.
   ///
@@ -2101,6 +2125,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Auto'**
   String get autoQualityLabel;
+
+  /// No description provided for @skipShortsInAutoplay.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip Shorts in autoplay'**
+  String get skipShortsInAutoplay;
+
+  /// No description provided for @skipShortsInAutoplaySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Never continue automatically into a Short'**
+  String get skipShortsInAutoplaySubtitle;
+
+  /// No description provided for @upNextIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Up next in {seconds} s'**
+  String upNextIn(int seconds);
+
+  /// No description provided for @playNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Play now'**
+  String get playNow;
+
+  /// No description provided for @replay.
+  ///
+  /// In en, this message translates to:
+  /// **'Replay'**
+  String get replay;
 }
 
 class _AppLocalizationsDelegate

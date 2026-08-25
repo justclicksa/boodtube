@@ -185,9 +185,13 @@
 
   "repeatNone": "Stop playback after one video",
   "repeatOne": "Repeat current video",
+  "repeatAll": "Loop the whole queue",
+  "repeatShuffle": "Shuffle the queue",
   "repeatPause": "Pause playback after each video",
   "repeatNoneShort": "Off",
   "repeatOneShort": "Repeat one",
+  "repeatAllShort": "Repeat all",
+  "repeatShuffleShort": "Shuffle",
   "repeatPauseShort": "Pause at end",
 
   "fitDefault": "Default",
@@ -538,5 +542,18 @@
   "autoplayNextSubtitle": "Continue with the next suggested video",
   "autoQuality": "Auto quality",
   "autoQualitySubtitle": "Pick resolution from your connection speed",
-  "autoQualityLabel": "Auto"
+  "autoQualityLabel": "Auto",
+  "skipShortsInAutoplay": "Skip Shorts in autoplay",
+  "skipShortsInAutoplaySubtitle": "Never continue automatically into a Short",
+  "upNext": "Up next",
+  "upNextIn": "Up next in {seconds} s",
+  "@upNextIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "playNow": "Play now",
+  "replay": "Replay"
 }

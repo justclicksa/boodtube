@@ -65,6 +65,8 @@ extension LocalizedRepeatMode on RepeatMode {
   String label(AppLocalizations l10n) => switch (this) {
         RepeatMode.none => l10n.repeatNone,
         RepeatMode.one => l10n.repeatOne,
+        RepeatMode.all => l10n.repeatAll,
+        RepeatMode.shuffle => l10n.repeatShuffle,
         RepeatMode.pause => l10n.repeatPause,
       };
 
@@ -72,6 +74,8 @@ extension LocalizedRepeatMode on RepeatMode {
   String shortLabel(AppLocalizations l10n) => switch (this) {
         RepeatMode.none => l10n.repeatNoneShort,
         RepeatMode.one => l10n.repeatOneShort,
+        RepeatMode.all => l10n.repeatAllShort,
+        RepeatMode.shuffle => l10n.repeatShuffleShort,
         RepeatMode.pause => l10n.repeatPauseShort,
       };
 }

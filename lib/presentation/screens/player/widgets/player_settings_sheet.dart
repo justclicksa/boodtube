@@ -508,6 +508,9 @@ class _RepeatMenu extends ConsumerWidget {
           _CheckRow(
             label: mode.label(l10n),
             selected: current == mode,
+            // The five modes read as one list of sentences otherwise;
+            // the glyph is what the eye actually picks out.
+            trailing: Icon(_iconFor(mode)),
             onTap: () {
               ref.read(playerControllerProvider.notifier).setRepeatMode(mode);
               Navigator.of(context).pop();
@@ -516,6 +519,14 @@ class _RepeatMenu extends ConsumerWidget {
       ],
     );
   }
+
+  static IconData _iconFor(RepeatMode mode) => switch (mode) {
+        RepeatMode.none => Icons.block,
+        RepeatMode.one => Icons.repeat_one,
+        RepeatMode.all => Icons.repeat,
+        RepeatMode.shuffle => Icons.shuffle,
+        RepeatMode.pause => Icons.pause_circle_outline,
+      };
 }
 
 // ============================================================

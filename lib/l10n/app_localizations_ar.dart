@@ -476,6 +476,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get repeatOne => 'تكرار المقطع الحالي';
 
   @override
+  String get repeatAll => 'تكرار قائمة التشغيل بالكامل';
+
+  @override
+  String get repeatShuffle => 'تشغيل القائمة عشوائياً';
+
+  @override
   String get repeatPause => 'الإيقاف المؤقت بعد كل مقطع';
 
   @override
@@ -483,6 +489,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get repeatOneShort => 'تكرار المقطع';
+
+  @override
+  String get repeatAllShort => 'تكرار الكل';
+
+  @override
+  String get repeatShuffleShort => 'عشوائي';
 
   @override
   String get repeatPauseShort => 'توقف عند النهاية';
@@ -1160,4 +1172,22 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get autoQualityLabel => 'تلقائي';
+
+  @override
+  String get skipShortsInAutoplay => 'تخطي Shorts في التشغيل التلقائي';
+
+  @override
+  String get skipShortsInAutoplaySubtitle =>
+      'عدم المتابعة تلقائياً إلى مقطع قصير';
+
+  @override
+  String upNextIn(int seconds) {
+    return 'التالي بعد $seconds ث';
+  }
+
+  @override
+  String get playNow => 'تشغيل الآن';
+
+  @override
+  String get replay => 'إعادة التشغيل';
 }

@@ -185,9 +185,13 @@
 
   "repeatNone": "إيقاف التشغيل بعد مقطع واحد",
   "repeatOne": "تكرار المقطع الحالي",
+  "repeatAll": "تكرار قائمة التشغيل بالكامل",
+  "repeatShuffle": "تشغيل القائمة عشوائياً",
   "repeatPause": "الإيقاف المؤقت بعد كل مقطع",
   "repeatNoneShort": "إيقاف",
   "repeatOneShort": "تكرار المقطع",
+  "repeatAllShort": "تكرار الكل",
+  "repeatShuffleShort": "عشوائي",
   "repeatPauseShort": "توقف عند النهاية",
 
   "fitDefault": "افتراضي",
@@ -517,5 +521,18 @@
   "autoplayNextSubtitle": "المتابعة بالمقطع المقترح التالي",
   "autoQuality": "جودة تلقائية",
   "autoQualitySubtitle": "اختيار الدقة حسب سرعة الاتصال",
-  "autoQualityLabel": "تلقائي"
+  "autoQualityLabel": "تلقائي",
+  "skipShortsInAutoplay": "تخطي Shorts في التشغيل التلقائي",
+  "skipShortsInAutoplaySubtitle": "عدم المتابعة تلقائياً إلى مقطع قصير",
+  "upNext": "التالي",
+  "upNextIn": "التالي بعد {seconds} ث",
+  "@upNextIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "playNow": "تشغيل الآن",
+  "replay": "إعادة التشغيل"
 }

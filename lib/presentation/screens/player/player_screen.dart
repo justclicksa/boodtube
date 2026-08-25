@@ -873,7 +873,132 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
                   ),
                 ),
               ),
+
+            // Autoplay's offer, and the ended card it falls back to.
+            // Last in the stack: playback has finished, so this owns the
+            // surface and its two buttons are never behind the controls.
+            if (state.error == null &&
+                (state.isUpNextPending || state.showReplay))
+              const Positioned.fill(child: _UpNextOverlay()),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// What autoplay puts on the player once a video ends: the video it is
+/// about to continue with, counting down, with the two ways out. When
+/// the countdown is cancelled — or nothing was suggested — the same card
+/// becomes the ended screen with a replay button.
+class _UpNextOverlay extends ConsumerWidget {
+  const _UpNextOverlay();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final state = ref.watch(playerControllerProvider);
+    final controller = ref.read(playerControllerProvider.notifier);
+    final next = state.upNext;
+    final pending = state.isUpNextPending && next != null;
+
+    return ColoredBox(
+      color: Colors.black.withValues(alpha: 0.72),
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (pending) ...[
+                  Row(
+                    children: [
+                      if (next.thumbnailUrl != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(AppSpacing.sm),
+                          child: Image(
+                            image: CachedNetworkImageProvider(
+                              next.thumbnailUrl!,
+                            ),
+                            width: 96,
+                            height: 54,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox(
+                              width: 96,
+                              height: 54,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              l10n.upNextIn(state.upNextCountdown ?? 0),
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              next.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (next.author.isNotEmpty)
+                              Text(
+                                next.author,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white60,
+                                  fontSize: 12,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: controller.cancelUpNext,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                        ),
+                        child: Text(l10n.cancel),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      FilledButton.icon(
+                        onPressed: () => controller.playUpNextNow(),
+                        icon: const Icon(Icons.play_arrow),
+                        label: Text(l10n.playNow),
+                      ),
+                    ],
+                  ),
+                ] else
+                  FilledButton.icon(
+                    onPressed: () => controller.replay(),
+                    icon: const Icon(Icons.replay),
+                    label: Text(l10n.replay),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -478,6 +478,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get repeatOne => 'Repeat current video';
 
   @override
+  String get repeatAll => 'Loop the whole queue';
+
+  @override
+  String get repeatShuffle => 'Shuffle the queue';
+
+  @override
   String get repeatPause => 'Pause playback after each video';
 
   @override
@@ -485,6 +491,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get repeatOneShort => 'Repeat one';
+
+  @override
+  String get repeatAllShort => 'Repeat all';
+
+  @override
+  String get repeatShuffleShort => 'Shuffle';
 
   @override
   String get repeatPauseShort => 'Pause at end';
@@ -1147,4 +1159,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get autoQualityLabel => 'Auto';
+
+  @override
+  String get skipShortsInAutoplay => 'Skip Shorts in autoplay';
+
+  @override
+  String get skipShortsInAutoplaySubtitle =>
+      'Never continue automatically into a Short';
+
+  @override
+  String upNextIn(int seconds) {
+    return 'Up next in $seconds s';
+  }
+
+  @override
+  String get playNow => 'Play now';
+
+  @override
+  String get replay => 'Replay';
 }

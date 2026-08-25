@@ -128,6 +128,11 @@ class AppSettings {
   /// When the queue is empty, continue with the first "Up next" video.
   final bool autoplayNext;
 
+  /// Never continue automatically into a Short. A Short that follows a
+  /// long video reads as the player having jumped somewhere else, so
+  /// autoplay passes over them by default.
+  final bool skipShortsInAutoplay;
+
   /// Pick the opening resolution from measured throughput instead of the
   /// fixed [defaultQuality] cap, and step down on stalls.
   final bool autoQuality;
@@ -160,6 +165,7 @@ class AppSettings {
     this.deArrowEnabled = false,
     this.showRemainingTime = false,
     this.autoplayNext = true,
+    this.skipShortsInAutoplay = true,
     this.autoQuality = true,
     this.playerQuickActions = const [
       PlayerQuickAction.cast,
@@ -187,6 +193,7 @@ class AppSettings {
     bool? deArrowEnabled,
     bool? showRemainingTime,
     bool? autoplayNext,
+    bool? skipShortsInAutoplay,
     bool? autoQuality,
     List<PlayerQuickAction>? playerQuickActions,
   }) {
@@ -209,6 +216,7 @@ class AppSettings {
       deArrowEnabled: deArrowEnabled ?? this.deArrowEnabled,
       showRemainingTime: showRemainingTime ?? this.showRemainingTime,
       autoplayNext: autoplayNext ?? this.autoplayNext,
+      skipShortsInAutoplay: skipShortsInAutoplay ?? this.skipShortsInAutoplay,
       autoQuality: autoQuality ?? this.autoQuality,
       playerQuickActions: playerQuickActions ?? this.playerQuickActions,
     );
@@ -236,6 +244,7 @@ class SettingsRepository {
   static const _keyDeArrow = 'settings.dearrow';
   static const _keyRemainingTime = 'settings.remaining_time';
   static const _keyAutoplayNext = 'settings.autoplay_next';
+  static const _keySkipShortsInAutoplay = 'settings.skip_shorts_autoplay';
   static const _keyAutoQuality = 'settings.auto_quality';
   static const _keyPlayerQuickActions = 'settings.player_quick_actions';
   static const _keyChannelPlayback = 'settings.channel_playback';
@@ -267,6 +276,8 @@ class SettingsRepository {
       deArrowEnabled: _prefs.getBool(_keyDeArrow) ?? false,
       showRemainingTime: _prefs.getBool(_keyRemainingTime) ?? false,
       autoplayNext: _prefs.getBool(_keyAutoplayNext) ?? true,
+      skipShortsInAutoplay:
+          _prefs.getBool(_keySkipShortsInAutoplay) ?? true,
       autoQuality: _prefs.getBool(_keyAutoQuality) ?? true,
       playerQuickActions: _readPlayerQuickActions(),
     );
@@ -290,6 +301,10 @@ class SettingsRepository {
 
   Future<void> setAutoplayNext(bool enabled) async {
     await _prefs.setBool(_keyAutoplayNext, enabled);
+  }
+
+  Future<void> setSkipShortsInAutoplay(bool enabled) async {
+    await _prefs.setBool(_keySkipShortsInAutoplay, enabled);
   }
 
   Future<void> setAutoQuality(bool enabled) async {
