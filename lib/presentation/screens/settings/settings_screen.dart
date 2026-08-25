@@ -22,6 +22,7 @@ import '../../l10n/locale_preference.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/settings_providers.dart';
 import '../../widgets/empty_view.dart';
+import '../player/subtitle_styles.dart';
 
 /// The running build's own name and version, read from the platform
 /// instead of being retyped in the About section every release.
@@ -279,6 +280,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               title: Text(l10n.pictureInPicture),
               value: settings.pictureInPictureEnabled,
               onChanged: controller.setPictureInPictureEnabled,
+            ),
+          ),
+          _SettingsRow(
+            keywords: [l10n.subtitleStyle, l10n.subtitles],
+            widget: ListTile(
+              leading: const Icon(Icons.subtitles),
+              title: Text(l10n.subtitleStyle),
+              subtitle: Text(
+                subtitleStyleFromName(settings.subtitleStyle).label(l10n),
+              ),
+              onTap: () => _showSubtitleStylePicker(settings, controller),
+            ),
+          ),
+          _SettingsRow(
+            keywords: [
+              l10n.defaultSubtitleLanguage,
+              l10n.defaultSubtitleLanguageSubtitle,
+              l10n.subtitles,
+            ],
+            widget: ListTile(
+              leading: const Icon(Icons.translate),
+              title: Text(l10n.defaultSubtitleLanguage),
+              subtitle: Text(
+                _subtitleLanguageLabel(
+                  l10n,
+                  settings.preferredSubtitleLanguage,
+                ),
+              ),
+              onTap: () =>
+                  _showSubtitleLanguagePicker(settings, controller),
             ),
           ),
           _SettingsRow(
@@ -556,6 +587,63 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  void _showSubtitleStylePicker(
+    AppSettings settings,
+    SettingsController controller,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final current = subtitleStyleFromName(settings.subtitleStyle);
+    showDialog<void>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(l10n.subtitleStyle),
+        children: SubtitleStyle.values.map((style) {
+          return RadioListTile<SubtitleStyle>(
+            value: style,
+            groupValue: current,
+            onChanged: (value) {
+              if (value != null) controller.setSubtitleStyle(value);
+              Navigator.pop(context);
+            },
+            title: Text(style.label(l10n)),
+            // The sample is drawn with the very function the player uses,
+            // so what is listed here is what plays.
+            subtitle: Text(
+              l10n.subtitleStylePreview,
+              style: subtitleTextStyleFor(style, baseFontSize: 14),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  void _showSubtitleLanguagePicker(
+    AppSettings settings,
+    SettingsController controller,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    showDialog<void>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(l10n.defaultSubtitleLanguage),
+        children: preferredSubtitleLanguageOptions.map((code) {
+          return RadioListTile<String>(
+            value: code,
+            groupValue: settings.preferredSubtitleLanguage,
+            onChanged: (value) {
+              if (value != null) {
+                controller.setPreferredSubtitleLanguage(value);
+              }
+              Navigator.pop(context);
+            },
+            title: Text(_subtitleLanguageLabel(l10n, code)),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   /// SmartTube's video buffer, chosen outside the player too — the
   /// running playback picks the change up on its next open, and
   /// immediately when set from the player's own sheet.
@@ -774,6 +862,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         'en' => 'English',
         'ar' => 'العربية',
         _ => l10n.systemDefault,
+      };
+
+  /// Label for the default-subtitle-language picker. Reuses
+  /// [_languageLabel] for the concrete locales so the two lists cannot
+  /// disagree about what "ar" is called.
+  String _subtitleLanguageLabel(AppLocalizations l10n, String code) =>
+      switch (code) {
+        appDefaultSubtitleLanguage => l10n.subtitleLanguageAppDefault,
+        noPreferredSubtitleLanguage => l10n.off,
+        _ => _languageLabel(l10n, code),
       };
 }
 

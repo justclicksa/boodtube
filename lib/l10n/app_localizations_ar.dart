@@ -1285,4 +1285,58 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get paidPromotionNotice => 'يتضمن ترويجًا مدفوعًا';
+
+  @override
+  String degreesValue(int degrees) {
+    return '$degrees°';
+  }
+
+  @override
+  String get videoAspect => 'نسبة العرض إلى الارتفاع';
+
+  @override
+  String get videoAspectAuto => 'تلقائي';
+
+  @override
+  String get videoRotate => 'تدوير';
+
+  @override
+  String get videoFlipHorizontal => 'قلب أفقي';
+
+  @override
+  String get videoZoomPercent => 'تكبير';
+
+  @override
+  String get subtitleStyle => 'نمط الترجمة';
+
+  @override
+  String get subtitleStylePreview => 'معاينة الترجمة';
+
+  @override
+  String get subtitleStyleDefault => 'افتراضي';
+
+  @override
+  String get subtitleStyleWhite => 'أبيض';
+
+  @override
+  String get subtitleStyleWhiteOnBlack => 'أبيض على أسود';
+
+  @override
+  String get subtitleStyleYellow => 'أصفر';
+
+  @override
+  String get subtitleStyleYellowOnBlack => 'أصفر على أسود';
+
+  @override
+  String get subtitleStyleCustom => 'مخصص';
+
+  @override
+  String get defaultSubtitleLanguage => 'الترجمة الافتراضية';
+
+  @override
+  String get defaultSubtitleLanguageSubtitle =>
+      'تفعيل الترجمة تلقائيًا بهذه اللغة';
+
+  @override
+  String get subtitleLanguageAppDefault => 'لغة التطبيق';
 }

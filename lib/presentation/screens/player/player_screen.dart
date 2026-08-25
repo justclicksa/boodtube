@@ -42,6 +42,8 @@ import '../../theme/app_theme.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/video_card.dart';
 import '../comments/comments_screen.dart';
+import 'subtitle_styles.dart';
+import 'video_transform.dart';
 import 'widgets/player_settings_sheet.dart';
 import 'widgets/live_chat_sheet.dart';
 import 'widgets/cast_device_sheet.dart';
@@ -570,6 +572,78 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
         VideoFit.zoom => BoxFit.cover,
       };
 
+  /// The video texture plus SmartTube's transforms: forced aspect,
+  /// rotation, horizontal flip and zoom percentage.
+  ///
+  /// All four are applied here in the widget tree rather than through
+  /// mpv (`video-aspect-override` via `NativePlayer.setProperty`). On the
+  /// texture path media_kit sizes the Flutter texture from the decoded
+  /// frame it is handed, so an mpv-side aspect override changes mpv's own
+  /// `dwidth`/`dheight` without ever reaching Flutter's layout: the
+  /// picture would keep its original shape. `setProperty` is also
+  /// libmpv-only, so the feature would silently vanish on any backend
+  /// that is not native mpv. `AspectRatio`/`RotatedBox`/`Transform`
+  /// behave identically on every platform and are cheap to rebuild.
+  ///
+  /// This subtree sits inside `IgnorePointer`, below the gesture layers
+  /// in the surface `Stack`, so rotating or scaling it never moves the
+  /// tap and drag regions — those stay in unrotated screen space.
+  Widget _videoLayer(PlayerStateData state, SubtitleStyle subtitleStyle) {
+    final aspect = state.videoAspect.ratio;
+
+    Widget video = Video(
+      controller: widget.videoController,
+      controls: null,
+      // With a forced aspect the picture is deformed to fill the frame,
+      // the way ExoPlayer's AspectRatioFrameLayout does. An explicitly
+      // chosen fit preset still wins over that.
+      fit: aspect != null && state.videoFit == VideoFit.fit
+          ? BoxFit.fill
+          : _fit,
+      fill: Colors.black,
+      subtitleViewConfiguration: subtitleViewConfigurationFor(
+        subtitleStyle,
+        scale: state.subtitleScale,
+        bottomPadding: state.subtitleOffset,
+        horizontalPadding: AppSpacing.lg,
+        customBackgroundOpacity: state.subtitleBackgroundOpacity,
+      ),
+      // media_kit_video defaults this to true and calls
+      // player.pause() the moment the app backgrounds. That is
+      // the right default for a widget that assumes you are
+      // watching, and it is what silently defeated background
+      // playback here: the process stayed alive and the audio
+      // session stayed active, but mpv had been paused out
+      // from under us. This app wants audio to keep going, and
+      // PlayerController drops the video track on background
+      // itself so nothing decodes off-screen.
+      pauseUponEnteringBackgroundMode: false,
+    );
+
+    if (aspect != null) {
+      video = Center(child: AspectRatio(aspectRatio: aspect, child: video));
+    }
+    if (state.flipHorizontal) {
+      video = Transform.flip(flipX: true, child: video);
+    }
+    final quarterTurns = quarterTurnsFor(state.rotationDegrees);
+    if (quarterTurns != 0) {
+      // RotatedBox, not Transform.rotate: a quarter turn has to re-lay
+      // out the child against swapped constraints, otherwise a 16:9
+      // frame is painted sideways into a 16:9 box and most of it is lost.
+      video = RotatedBox(quarterTurns: quarterTurns, child: video);
+    }
+    if (!isIdentityZoom(state.zoomPercent)) {
+      video = Transform.scale(
+        scale: zoomScaleFor(state.zoomPercent),
+        child: video,
+      );
+    }
+    // Zoom overflows the player box by design, so clip it back to the
+    // surface instead of painting over the rows below.
+    return ClipRect(child: video);
+  }
+
   void _onDoubleTap(Offset globalPosition) {
     if (!ref.read(settingsControllerProvider).doubleTapToSeek) {
       // With the gesture off, a double tap is just two taps.
@@ -717,6 +791,14 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
+    // The caption look is a global preference, not per playback, so it
+    // is read straight from settings rather than mirrored into
+    // PlayerStateData.
+    final subtitleStyle = subtitleStyleFromName(
+      ref.watch(
+        settingsControllerProvider.select((settings) => settings.subtitleStyle),
+      ),
+    );
 
     return ColoredBox(
       color: Colors.black,
@@ -749,39 +831,7 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
               // renderer must be display-only; otherwise taps and vertical
               // drags intermittently disappear before reaching the parent.
               IgnorePointer(
-                child: Video(
-                  controller: widget.videoController,
-                  controls: null,
-                  fit: _fit,
-                  fill: Colors.black,
-                  subtitleViewConfiguration: SubtitleViewConfiguration(
-                    style: TextStyle(
-                      height: 1.35,
-                      fontSize: 28 * state.subtitleScale,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      backgroundColor: Colors.black.withValues(
-                        alpha: state.subtitleBackgroundOpacity,
-                      ),
-                    ),
-                    padding: EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
-                      0,
-                      AppSpacing.lg,
-                      state.subtitleOffset,
-                    ),
-                  ),
-                  // media_kit_video defaults this to true and calls
-                  // player.pause() the moment the app backgrounds. That is
-                  // the right default for a widget that assumes you are
-                  // watching, and it is what silently defeated background
-                  // playback here: the process stayed alive and the audio
-                  // session stayed active, but mpv had been paused out
-                  // from under us. This app wants audio to keep going, and
-                  // PlayerController drops the video track on background
-                  // itself so nothing decodes off-screen.
-                  pauseUponEnteringBackgroundMode: false,
-                ),
+                child: _videoLayer(state, subtitleStyle),
               ),
 
             // A physical iPhone may keep the texture as the active hit-test

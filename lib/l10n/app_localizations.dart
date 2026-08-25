@@ -2335,6 +2335,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Includes paid promotion'**
   String get paidPromotionNotice;
+
+  /// No description provided for @degreesValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{degrees}°'**
+  String degreesValue(int degrees);
+
+  /// No description provided for @videoAspect.
+  ///
+  /// In en, this message translates to:
+  /// **'Aspect ratio'**
+  String get videoAspect;
+
+  /// No description provided for @videoAspectAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get videoAspectAuto;
+
+  /// No description provided for @videoRotate.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate'**
+  String get videoRotate;
+
+  /// No description provided for @videoFlipHorizontal.
+  ///
+  /// In en, this message translates to:
+  /// **'Flip horizontally'**
+  String get videoFlipHorizontal;
+
+  /// No description provided for @videoZoomPercent.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom'**
+  String get videoZoomPercent;
+
+  /// No description provided for @subtitleStyle.
+  ///
+  /// In en, this message translates to:
+  /// **'Subtitle style'**
+  String get subtitleStyle;
+
+  /// No description provided for @subtitleStylePreview.
+  ///
+  /// In en, this message translates to:
+  /// **'The quick brown fox'**
+  String get subtitleStylePreview;
+
+  /// No description provided for @subtitleStyleDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get subtitleStyleDefault;
+
+  /// No description provided for @subtitleStyleWhite.
+  ///
+  /// In en, this message translates to:
+  /// **'White'**
+  String get subtitleStyleWhite;
+
+  /// No description provided for @subtitleStyleWhiteOnBlack.
+  ///
+  /// In en, this message translates to:
+  /// **'White on black'**
+  String get subtitleStyleWhiteOnBlack;
+
+  /// No description provided for @subtitleStyleYellow.
+  ///
+  /// In en, this message translates to:
+  /// **'Yellow'**
+  String get subtitleStyleYellow;
+
+  /// No description provided for @subtitleStyleYellowOnBlack.
+  ///
+  /// In en, this message translates to:
+  /// **'Yellow on black'**
+  String get subtitleStyleYellowOnBlack;
+
+  /// No description provided for @subtitleStyleCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get subtitleStyleCustom;
+
+  /// No description provided for @defaultSubtitleLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Default subtitles'**
+  String get defaultSubtitleLanguage;
+
+  /// No description provided for @defaultSubtitleLanguageSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn captions on automatically in this language'**
+  String get defaultSubtitleLanguageSubtitle;
+
+  /// No description provided for @subtitleLanguageAppDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'App language'**
+  String get subtitleLanguageAppDefault;
 }
 
 class _AppLocalizationsDelegate

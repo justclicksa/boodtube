@@ -13,6 +13,7 @@ import '../../domain/entities/content_filter.dart';
 import '../../domain/entities/sponsor_segment.dart';
 import '../../services/backup_service.dart';
 import '../../services/player_tuning.dart';
+import '../screens/player/subtitle_styles.dart';
 import 'repository_providers.dart';
 
 // ============================================================
@@ -157,6 +158,24 @@ class SettingsController extends StateNotifier<AppSettings> {
   Future<void> setPictureInPictureEnabled(bool enabled) async {
     state = state.copyWith(pictureInPictureEnabled: enabled);
     await _repo.setPictureInPictureEnabled(enabled);
+  }
+
+  // ============================================================
+  // Subtitles
+  // ============================================================
+
+  /// Caption look. Stored by name — see [SubtitleStyle] in
+  /// presentation/screens/player/subtitle_styles.dart for the presets.
+  Future<void> setSubtitleStyle(SubtitleStyle style) async {
+    state = state.copyWith(subtitleStyle: style.name);
+    await _repo.setSubtitleStyle(style.name);
+  }
+
+  /// Language captions are auto-selected in for videos with no
+  /// remembered subtitle. See [preferredSubtitleLanguageOptions].
+  Future<void> setPreferredSubtitleLanguage(String language) async {
+    state = state.copyWith(preferredSubtitleLanguage: language);
+    await _repo.setPreferredSubtitleLanguage(language);
   }
 
   // ============================================================

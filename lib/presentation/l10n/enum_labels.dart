@@ -12,6 +12,8 @@ import '../../domain/entities/sponsor_segment.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/player_tuning.dart';
 import '../providers/player_providers.dart';
+import '../screens/player/subtitle_styles.dart';
+import '../screens/player/video_transform.dart';
 
 extension LocalizedQuality on MediaFormatQuality {
   String label(AppLocalizations l10n) => switch (this) {
@@ -112,4 +114,21 @@ extension LocalizedBufferPreset on BufferPreset {
   /// so the menu never drifts from what the engine was told.
   String secondsLabel(AppLocalizations l10n) =>
       l10n.secondsShort(bufferPresetSeconds[this]!);
+}
+
+extension LocalizedVideoAspect on VideoAspect {
+  /// Ratios are typeset, not translated — "16:9" reads the same in every
+  /// locale. Only "Auto" needs a translation.
+  String label(AppLocalizations l10n) => shortLabel ?? l10n.videoAspectAuto;
+}
+
+extension LocalizedSubtitleStyle on SubtitleStyle {
+  String label(AppLocalizations l10n) => switch (this) {
+        SubtitleStyle.defaultStyle => l10n.subtitleStyleDefault,
+        SubtitleStyle.white => l10n.subtitleStyleWhite,
+        SubtitleStyle.whiteOnBlack => l10n.subtitleStyleWhiteOnBlack,
+        SubtitleStyle.yellow => l10n.subtitleStyleYellow,
+        SubtitleStyle.yellowOnBlack => l10n.subtitleStyleYellowOnBlack,
+        SubtitleStyle.custom => l10n.subtitleStyleCustom,
+      };
 }
