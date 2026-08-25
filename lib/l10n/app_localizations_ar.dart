@@ -1160,4 +1160,89 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get autoQualityLabel => 'تلقائي';
+
+  @override
+  String get downloadQuality => 'Ø¬ÙØ¯Ø© Ø§ÙØªÙØ²ÙÙ';
+
+  @override
+  String get downloadQueued => 'ÙÙ Ø§ÙØ§ÙØªØ¸Ø§Ø±';
+
+  @override
+  String get downloadPaused => 'ÙÙÙÙ ÙØ¤ÙØªÙØ§';
+
+  @override
+  String get pauseDownload => 'Ø¥ÙÙØ§Ù ÙØ¤ÙØª';
+
+  @override
+  String get resumeDownload => 'ÙØªØ§Ø¨Ø¹Ø©';
+
+  @override
+  String get deleteDownload => 'Ø­Ø°Ù Ø§ÙØªÙØ²ÙÙ';
+
+  @override
+  String get deleteDownloadConfirm =>
+      'Ø¥Ø²Ø§ÙØ© ÙØ°Ø§ Ø§ÙÙÙØ·Ø¹ ÙÙ Ø¬ÙØ§Ø²ÙØ ÙÙÙÙÙ ØªÙØ²ÙÙÙ ÙØ±Ø© Ø£Ø®Ø±Ù ÙØ§Ø­ÙÙØ§.';
+
+  @override
+  String get downloadRemoved => 'ØªÙ Ø­Ø°Ù Ø§ÙØªÙØ²ÙÙ';
+
+  @override
+  String get downloadFailedNetwork =>
+      'Ø§ÙÙØ·Ø¹ Ø§ÙØ§ØªØµØ§Ù Ø£Ø«ÙØ§Ø¡ Ø§ÙØªÙØ²ÙÙ';
+
+  @override
+  String get downloadFailedStorage =>
+      'ÙØ§ ØªÙØ¬Ø¯ ÙØ³Ø§Ø­Ø© ÙØ§ÙÙØ© Ø¹ÙÙ Ø§ÙØ¬ÙØ§Ø²';
+
+  @override
+  String get downloadFailedCapped =>
+      'ØªÙÙÙØª YouTube Ø¹Ù Ø¥Ø±Ø³Ø§Ù ÙØ°Ø§ Ø§ÙÙÙØ·Ø¹. Ø¬Ø±ÙØ¨ Ø¬ÙØ¯Ø© Ø£ÙÙ.';
+
+  @override
+  String get downloadFailedUnavailable =>
+      'ÙØ§ ÙÙÙÙ ØªÙØ²ÙÙ ÙØ°Ø§ Ø§ÙÙÙØ·Ø¹';
+
+  @override
+  String get downloadFailedUnknown => 'ÙØ´Ù Ø§ÙØªÙØ²ÙÙ';
+
+  @override
+  String storageUsed(String size) {
+    return '$size ÙØ³ØªØ®Ø¯ÙØ© ÙÙØªÙØ²ÙÙØ§Øª';
+  }
+
+  @override
+  String downloadProgressDetail(String done, String total) {
+    return '$done ÙÙ $total';
+  }
+
+  @override
+  String transferRate(String rate) {
+    return '$rate/Ø«';
+  }
+
+  @override
+  String get sortBy => 'Ø§ÙØªØ±ØªÙØ¨';
+
+  @override
+  String get sortNewest => 'Ø§ÙØ£Ø­Ø¯Ø« Ø£ÙÙÙØ§';
+
+  @override
+  String get sortOldest => 'Ø§ÙØ£ÙØ¯Ù Ø£ÙÙÙØ§';
+
+  @override
+  String get sortLargest => 'Ø§ÙØ£ÙØ¨Ø± Ø­Ø¬ÙÙØ§';
+
+  @override
+  String get sortTitle => 'Ø§ÙØ¹ÙÙØ§Ù';
+
+  @override
+  String get offlineQuality => 'Ø¯ÙÙ Ø§ØªØµØ§Ù';
+
+  @override
+  String get offlineQualityNotice =>
+      'ØªØ´ØºÙÙ Ø§ÙÙØ³Ø®Ø© Ø§ÙÙÙØ²ÙÙØ©. Ø®ÙØ§Ø±Ø§Øª Ø§ÙØ¬ÙØ¯Ø© ØªØ­ØªØ§Ø¬ Ø¥ÙÙ Ø§ØªØµØ§Ù.';
+
+  @override
+  String get downloadGone =>
+      'ÙÙ ÙØ¹Ø¯ ÙØ°Ø§ Ø§ÙØªÙØ²ÙÙ ÙÙØ¬ÙØ¯ÙØ§ Ø¹ÙÙ Ø§ÙØ¬ÙØ§Ø²';
 }

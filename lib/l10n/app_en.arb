@@ -538,5 +538,53 @@
   "autoplayNextSubtitle": "Continue with the next suggested video",
   "autoQuality": "Auto quality",
   "autoQualitySubtitle": "Pick resolution from your connection speed",
-  "autoQualityLabel": "Auto"
+  "autoQualityLabel": "Auto",
+  "downloadQuality": "Download quality",
+  "downloadQueued": "Queued",
+  "downloadPaused": "Paused",
+  "pauseDownload": "Pause",
+  "resumeDownload": "Resume",
+  "deleteDownload": "Delete download",
+  "deleteDownloadConfirm": "Remove this video from your device? You can download it again later.",
+  "downloadRemoved": "Download deleted",
+  "downloadFailedNetwork": "Connection lost during the download",
+  "downloadFailedStorage": "Not enough space on this device",
+  "downloadFailedCapped": "YouTube stopped serving this video. Try a lower quality.",
+  "downloadFailedUnavailable": "This video can't be downloaded",
+  "downloadFailedUnknown": "Download failed",
+  "storageUsed": "{size} used by downloads",
+  "@storageUsed": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "downloadProgressDetail": "{done} of {total}",
+  "@downloadProgressDetail": {
+    "placeholders": {
+      "done": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "transferRate": "{rate}/s",
+  "@transferRate": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "sortBy": "Sort",
+  "sortNewest": "Newest first",
+  "sortOldest": "Oldest first",
+  "sortLargest": "Largest first",
+  "sortTitle": "Title",
+  "offlineQuality": "Offline",
+  "offlineQualityNotice": "Playing your downloaded copy. Quality options need a connection.",
+  "downloadGone": "This download is no longer on the device"
 }

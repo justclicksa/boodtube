@@ -14,10 +14,13 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- NOTE: Storage permissions intentionally NOT added.
-         The download_manager is a dead service (no UI hooks it up);
-         adding WRITE_EXTERNAL_STORAGE would request a runtime
-         permission the app never uses. Add it back when downloads
-         are actually wired to a UI. -->
+         Downloads ARE wired up (the video menu, the player pill and
+         the Downloads screen all drive DownloadManager), but they are
+         written to getApplicationDocumentsDirectory() - the app's own
+         sandbox, which needs no permission on any API level. Asking
+         for WRITE_EXTERNAL_STORAGE would be a runtime prompt for
+         access the app never uses. It would only be needed if offline
+         copies were ever moved to shared storage. -->
 
     <application
         android:name="${applicationName}"

@@ -2101,6 +2101,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Auto'**
   String get autoQualityLabel;
+
+  /// No description provided for @downloadQuality.
+  ///
+  /// In en, this message translates to:
+  /// **'Download quality'**
+  String get downloadQuality;
+
+  /// No description provided for @downloadQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued'**
+  String get downloadQueued;
+
+  /// No description provided for @downloadPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get downloadPaused;
+
+  /// No description provided for @pauseDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get pauseDownload;
+
+  /// No description provided for @resumeDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get resumeDownload;
+
+  /// No description provided for @deleteDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete download'**
+  String get deleteDownload;
+
+  /// No description provided for @deleteDownloadConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this video from your device? You can download it again later.'**
+  String get deleteDownloadConfirm;
+
+  /// No description provided for @downloadRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Download deleted'**
+  String get downloadRemoved;
+
+  /// No description provided for @downloadFailedNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost during the download'**
+  String get downloadFailedNetwork;
+
+  /// No description provided for @downloadFailedStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Not enough space on this device'**
+  String get downloadFailedStorage;
+
+  /// No description provided for @downloadFailedCapped.
+  ///
+  /// In en, this message translates to:
+  /// **'YouTube stopped serving this video. Try a lower quality.'**
+  String get downloadFailedCapped;
+
+  /// No description provided for @downloadFailedUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This video can\'t be downloaded'**
+  String get downloadFailedUnavailable;
+
+  /// No description provided for @downloadFailedUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Download failed'**
+  String get downloadFailedUnknown;
+
+  /// No description provided for @storageUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} used by downloads'**
+  String storageUsed(String size);
+
+  /// No description provided for @downloadProgressDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total}'**
+  String downloadProgressDetail(String done, String total);
+
+  /// No description provided for @transferRate.
+  ///
+  /// In en, this message translates to:
+  /// **'{rate}/s'**
+  String transferRate(String rate);
+
+  /// No description provided for @sortBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get sortBy;
+
+  /// No description provided for @sortNewest.
+  ///
+  /// In en, this message translates to:
+  /// **'Newest first'**
+  String get sortNewest;
+
+  /// No description provided for @sortOldest.
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest first'**
+  String get sortOldest;
+
+  /// No description provided for @sortLargest.
+  ///
+  /// In en, this message translates to:
+  /// **'Largest first'**
+  String get sortLargest;
+
+  /// No description provided for @sortTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get sortTitle;
+
+  /// No description provided for @offlineQuality.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get offlineQuality;
+
+  /// No description provided for @offlineQualityNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Playing your downloaded copy. Quality options need a connection.'**
+  String get offlineQualityNotice;
+
+  /// No description provided for @downloadGone.
+  ///
+  /// In en, this message translates to:
+  /// **'This download is no longer on the device'**
+  String get downloadGone;
 }
 
 class _AppLocalizationsDelegate

@@ -133,9 +133,15 @@ class _RootMenu extends ConsumerWidget {
             _MenuRow(
               icon: Icons.high_quality_outlined,
               title: l10n.quality,
-              value: state.pendingHeight != null
-                  ? qualityLabelFor(state.pendingHeight!)
-                  : (state.currentQualityLabel ?? l10n.qualityAuto),
+              // A downloaded file is one rendition and nothing can
+              // switch it, so the row says so instead of opening a menu
+              // whose every entry would be a no-op.
+              value: state.isOffline
+                  ? l10n.offlineQuality
+                  : state.pendingHeight != null
+                      ? qualityLabelFor(state.pendingHeight!)
+                      : (state.currentQualityLabel ?? l10n.qualityAuto),
+              enabled: !state.isOffline,
               onTap: () => onOpen(_SheetPage.quality),
             ),
             _MenuRow(
@@ -252,7 +258,14 @@ class _QualityMenu extends ConsumerWidget {
       onBack: onBack,
       title: l10n.quality,
       children: [
-        if (heights.isNotEmpty)
+        if (state.isOffline)
+          ListTile(
+            title: Text(
+              l10n.offlineQualityNotice,
+              style: TextStyle(color: Theme.of(context).yt.secondaryText),
+            ),
+          ),
+        if (!state.isOffline && heights.isNotEmpty)
           _CheckRow(
             label: auto && current != null
                 ? '${l10n.autoQualityLabel} ($current)'
@@ -263,14 +276,14 @@ class _QualityMenu extends ConsumerWidget {
               ref.read(playerControllerProvider.notifier).selectAutoQuality();
             },
           ),
-        if (heights.isEmpty)
+        if (!state.isOffline && heights.isEmpty)
           ListTile(
             title: Text(
               l10n.noAlternativesAvailable,
               style: TextStyle(color: Theme.of(context).yt.secondaryText),
             ),
           ),
-        for (final h in heights)
+        for (final h in state.isOffline ? const <int>[] : heights)
           _CheckRow(
             label: qualityLabelFor(h),
             // While a switch is resolving, the tick follows the pick, not

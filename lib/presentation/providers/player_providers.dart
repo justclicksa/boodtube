@@ -3,6 +3,7 @@
 // ============================================================
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/widgets.dart';
@@ -122,6 +123,7 @@ class PlayerStateData {
     this.sleepTimerEnd,
     this.selectedSubtitle,
     this.isPiPActive = false,
+    this.isOffline = false,
     this.isFullscreen = false,
     this.videoFit = VideoFit.fit,
     this.seekInterval = const Duration(seconds: 10),
@@ -160,6 +162,13 @@ class PlayerStateData {
   final DateTime? sleepTimerEnd;
   final MediaSubtitle? selectedSubtitle;
   final bool isPiPActive;
+
+  /// Playing a downloaded file off the disk. Nothing that needs the
+  /// network — the quality ladder, SponsorBlock, related videos — has
+  /// anything to offer in this mode, so the UI reads this rather than
+  /// guessing from a null URL.
+  final bool isOffline;
+
   final bool isFullscreen;
   final VideoFit videoFit;
   final Duration seekInterval;
@@ -206,6 +215,7 @@ class PlayerStateData {
     DateTime? sleepTimerEnd,
     MediaSubtitle? selectedSubtitle,
     bool? isPiPActive,
+    bool? isOffline,
     bool? isFullscreen,
     VideoFit? videoFit,
     Duration? seekInterval,
@@ -230,6 +240,7 @@ class PlayerStateData {
     bool clearFallbackReason = false,
     bool clearDiagnostics = false,
     bool clearAudioTrack = false,
+    bool clearUrls = false,
   }) {
     return PlayerStateData(
       currentItem: clearItem ? null : (currentItem ?? this.currentItem),
@@ -241,8 +252,10 @@ class PlayerStateData {
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
-      currentVideoUrl: currentVideoUrl ?? this.currentVideoUrl,
-      currentAudioUrl: currentAudioUrl ?? this.currentAudioUrl,
+      currentVideoUrl:
+          clearUrls ? null : (currentVideoUrl ?? this.currentVideoUrl),
+      currentAudioUrl:
+          clearUrls ? null : (currentAudioUrl ?? this.currentAudioUrl),
       currentQualityLabel: currentQualityLabel ?? this.currentQualityLabel,
       availableHeights: availableHeights ?? this.availableHeights,
       sponsorSegments: sponsorSegments ?? this.sponsorSegments,
@@ -255,6 +268,7 @@ class PlayerStateData {
       selectedSubtitle:
           clearSubtitle ? null : (selectedSubtitle ?? this.selectedSubtitle),
       isPiPActive: isPiPActive ?? this.isPiPActive,
+      isOffline: isOffline ?? this.isOffline,
       isFullscreen: isFullscreen ?? this.isFullscreen,
       videoFit: videoFit ?? this.videoFit,
       seekInterval: seekInterval ?? this.seekInterval,
@@ -412,40 +426,118 @@ class PlayerController extends StateNotifier<PlayerStateData>
     }
   }
 
-  /// Plays a previously downloaded copy straight from disk. Falls back to
-  /// streaming when the files are gone.
+  /// Plays a previously downloaded copy straight from disk. Returns false
+  /// — so the caller streams instead — when there is no usable copy.
   Future<bool> loadOffline(String videoId) async {
     final db = _ref.read(appDatabaseProvider);
     final row = await db.getDownload(videoId);
     if (row == null) return false;
 
-    state = state.copyWith(isLoading: true, clearError: true);
+    // A row whose file was deleted behind the app's back (an OS purge of
+    // the sandbox, a restore, a manual clean) must not open a black
+    // player: drop the stale row and let the caller stream.
+    if (!File(row.videoPath).existsSync()) {
+      await db.deleteDownload(videoId);
+      return false;
+    }
+
+    _savePositionTimer?.cancel();
+    _cpn = HistorySync.newCpn();
+    _cappedHeights.clear();
+    state = state.copyWith(
+      isLoading: true,
+      isOffline: true,
+      clearError: true,
+      clearDiagnostics: true,
+      clearPendingHeight: true,
+      clearAudioTrack: true,
+      clearUrls: true,
+      // Nothing the last streamed video left behind applies to this
+      // one. The quality menu would otherwise offer resolutions this
+      // file cannot switch to, and another video's SponsorBlock
+      // segments would be skipped inside it.
+      availableHeights: const [],
+      sponsorSegments: const [],
+      audioTracks: const [],
+    );
+
+    final item = MediaItem(
+      videoId: row.videoId,
+      title: row.title,
+      author: row.author,
+      channelId: row.channelId,
+      thumbnailUrl: row.thumbnailUrl,
+      duration: Duration(milliseconds: row.durationMs),
+      publishedAt: row.downloadedAt,
+      formats: const [],
+      subtitles: const [],
+      chapters: const [],
+    );
+
     try {
-      await _player.open(Media('file://${row.videoPath}'));
-      if (row.audioPath != null) {
-        await _player.setAudioTrack(AudioTrack.uri('file://${row.audioPath}'));
+      await _player.open(Media(Uri.file(row.videoPath).toString()));
+      final audioPath = row.audioPath;
+      if (audioPath != null && File(audioPath).existsSync()) {
+        await _player.setAudioTrack(
+          AudioTrack.uri(Uri.file(audioPath).toString()),
+        );
       }
+      await _player.setRate(state.playbackSpeed);
       state = state.copyWith(
         isLoading: false,
-        currentItem: MediaItem(
-          videoId: row.videoId,
-          title: row.title,
-          author: row.author,
-          channelId: row.channelId,
-          thumbnailUrl: row.thumbnailUrl,
-          duration: Duration(milliseconds: row.durationMs),
-          publishedAt: row.downloadedAt,
-          formats: const [],
-          subtitles: const [],
-          chapters: const [],
-        ),
+        clearError: true,
+        currentItem: item,
         currentQualityLabel: row.qualityLabel,
+      );
+
+      // The lock screen and the notification are the same whether the
+      // bytes came off the network or off the disk.
+      await _ref.read(audioHandlerProvider).setMediaItem(item);
+
+      // Offline is where resuming matters most — it is the mode people
+      // use on a commute, in pieces. This was missing entirely: every
+      // downloaded video restarted from zero.
+      final posResult = await _libraryRepo.getPlayPosition(videoId);
+      final saved = posResult.dataOrNull;
+      if (saved != null && saved > Duration.zero) {
+        await _player.seek(saved);
+      }
+      _savePositionTimer = Timer.periodic(
+        const Duration(seconds: 10),
+        (_) => _saveCurrentPosition(),
       );
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        isOffline: false,
+        error: e.toString(),
+      );
       return false;
     }
+  }
+
+  /// The offline copy being played was just deleted.
+  ///
+  /// On Android mpv keeps reading through its open descriptor after the
+  /// unlink, so nothing crashes immediately — it dies later, at a seek,
+  /// with no way to explain itself. Stopping here turns that into a
+  /// sentence, and leaves the page in a state whose controls match what
+  /// still exists.
+  Future<void> handleDownloadRemoved(String videoId) async {
+    if (!state.isOffline || state.currentItem?.videoId != videoId) return;
+    _savePositionTimer?.cancel();
+    _savePositionTimer = null;
+    try {
+      await _player.stop();
+    } catch (_) {}
+    state = state.copyWith(
+      isPlaying: false,
+      isLoading: false,
+      isOffline: false,
+      clearUrls: true,
+      error: 'download-removed',
+    );
   }
 
   /// Loads a video: metadata, streams, then hands the URLs to mpv through
@@ -468,6 +560,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
     final seed = cachedMediaItem(videoId);
     state = state.copyWith(
       isLoading: true,
+      isOffline: false,
       clearError: true,
       clearDiagnostics: true,
       currentItem: seed ?? state.currentItem,
@@ -692,6 +785,10 @@ class PlayerController extends StateNotifier<PlayerStateData>
   /// has been attempted.
   Future<void> _recoverPlayback(String reason) async {
     final item = state.currentItem;
+    // A local file has no signed URL to refresh and no lower rung to
+    // fall back to. Recovering it would resolve network streams for a
+    // video the user deliberately took offline.
+    if (state.isOffline) return;
     if (_recoveringPlayback || item == null || item.isLive) {
       if (item?.isLive == true) {
         state = state.copyWith(error: reason, isLoading: false);
@@ -794,6 +891,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
   /// Hands resolution back to the throughput heuristic. Re-opens at the
   /// rung it would pick now when that differs from what is playing.
   Future<void> selectAutoQuality() async {
+    if (state.isOffline) return;
     await _ref.read(settingsControllerProvider.notifier).setAutoQuality(true);
     unawaited(_rememberChannel(clearQualityHeight: true));
     final target = _autoHeight();
@@ -804,7 +902,8 @@ class PlayerController extends StateNotifier<PlayerStateData>
 
   Future<void> switchQuality(int height, {bool manual = true}) async {
     final item = state.currentItem;
-    if (item == null || _switchingQuality) return;
+    // The downloaded file is the only rendition there is.
+    if (state.isOffline || item == null || _switchingQuality) return;
     _switchingQuality = true;
     if (manual) {
       // An explicit pick is a statement: stop second-guessing it.
@@ -972,7 +1071,9 @@ class PlayerController extends StateNotifier<PlayerStateData>
   /// live, or the related list failed to load.
   Future<void> _playRelatedIfEnabled() async {
     final item = state.currentItem;
-    if (item == null || item.isLive) return;
+    // Autoplaying an online video after an offline one strands anyone
+    // watching downloads precisely because they have no connection.
+    if (state.isOffline || item == null || item.isLive) return;
     if (!_ref.read(settingsControllerProvider).autoplayNext) return;
     try {
       final related =
@@ -1071,7 +1172,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
 
   Future<void> selectAudioTrack(ResolvedAudioTrack track) async {
     final item = state.currentItem;
-    if (item == null || _switchingQuality) return;
+    if (state.isOffline || item == null || _switchingQuality) return;
     _switchingQuality = true;
     final resumeFrom = state.position;
     final wasPlaying = state.isPlaying;
