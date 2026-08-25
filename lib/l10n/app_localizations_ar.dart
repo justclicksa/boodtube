@@ -1,6 +1,5 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -1227,4 +1226,34 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get seekPreview => 'معاينة موضع التشغيل';
+
+  @override
+  String get repeatAll => 'تكرار قائمة التشغيل بالكامل';
+
+  @override
+  String get repeatShuffle => 'تشغيل القائمة عشوائياً';
+
+  @override
+  String get repeatAllShort => 'تكرار الكل';
+
+  @override
+  String get repeatShuffleShort => 'عشوائي';
+
+  @override
+  String get skipShortsInAutoplay => 'تخطي Shorts في التشغيل التلقائي';
+
+  @override
+  String get skipShortsInAutoplaySubtitle =>
+      'عدم المتابعة تلقائياً إلى مقطع قصير';
+
+  @override
+  String upNextIn(int seconds) {
+    return 'التالي بعد $seconds ث';
+  }
+
+  @override
+  String get playNow => 'تشغيل الآن';
+
+  @override
+  String get replay => 'إعادة التشغيل';
 }

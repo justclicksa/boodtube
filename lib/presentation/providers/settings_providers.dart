@@ -78,6 +78,11 @@ class SettingsController extends StateNotifier<AppSettings> {
     await _repo.setAutoplayNext(enabled);
   }
 
+  Future<void> setSkipShortsInAutoplay(bool enabled) async {
+    state = state.copyWith(skipShortsInAutoplay: enabled);
+    await _repo.setSkipShortsInAutoplay(enabled);
+  }
+
   Future<void> setAutoQuality(bool enabled) async {
     state = state.copyWith(autoQuality: enabled);
     await _repo.setAutoQuality(enabled);

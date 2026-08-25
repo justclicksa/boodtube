@@ -566,5 +566,21 @@
   "engineCodec": "Engine codec",
   "droppedFrames": "Dropped frames",
   "videoBufferLiveNote": "Live broadcasts always use the low buffer",
-  "seekPreview": "Seek preview"
+  "seekPreview": "Seek preview",
+  "repeatAll": "Loop the whole queue",
+  "repeatShuffle": "Shuffle the queue",
+  "repeatAllShort": "Repeat all",
+  "repeatShuffleShort": "Shuffle",
+  "skipShortsInAutoplay": "Skip Shorts in autoplay",
+  "skipShortsInAutoplaySubtitle": "Never continue automatically into a Short",
+  "upNextIn": "Up next in {seconds} s",
+  "@upNextIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "playNow": "Play now",
+  "replay": "Replay"
 }

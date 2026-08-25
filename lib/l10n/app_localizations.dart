@@ -63,7 +63,7 @@ import 'app_localizations_en.dart';
 /// property.
 abstract class AppLocalizations {
   AppLocalizations(String locale)
-    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+      : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -86,16 +86,16 @@ abstract class AppLocalizations {
   /// of delegates is preferred or required.
   static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
       <LocalizationsDelegate<dynamic>>[
-        delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ];
+    delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+  ];
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('ar'),
-    Locale('en'),
+    Locale('en')
   ];
 
   /// No description provided for @appTitle.
@@ -2227,6 +2227,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Seek preview'**
   String get seekPreview;
+
+  /// No description provided for @repeatAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Loop the whole queue'**
+  String get repeatAll;
+
+  /// No description provided for @repeatShuffle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shuffle the queue'**
+  String get repeatShuffle;
+
+  /// No description provided for @repeatAllShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat all'**
+  String get repeatAllShort;
+
+  /// No description provided for @repeatShuffleShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Shuffle'**
+  String get repeatShuffleShort;
+
+  /// No description provided for @skipShortsInAutoplay.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip Shorts in autoplay'**
+  String get skipShortsInAutoplay;
+
+  /// No description provided for @skipShortsInAutoplaySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Never continue automatically into a Short'**
+  String get skipShortsInAutoplaySubtitle;
+
+  /// No description provided for @upNextIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Up next in {seconds} s'**
+  String upNextIn(int seconds);
+
+  /// No description provided for @playNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Play now'**
+  String get playNow;
+
+  /// No description provided for @replay.
+  ///
+  /// In en, this message translates to:
+  /// **'Replay'**
+  String get replay;
 }
 
 class _AppLocalizationsDelegate
@@ -2256,9 +2310,8 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   }
 
   throw FlutterError(
-    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
-    'an issue with the localizations generation tool. Please file an issue '
-    'on GitHub with a reproducible sample app and the gen-l10n configuration '
-    'that was used.',
-  );
+      'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+      'an issue with the localizations generation tool. Please file an issue '
+      'on GitHub with a reproducible sample app and the gen-l10n configuration '
+      'that was used.');
 }

@@ -545,5 +545,21 @@
   "engineCodec": "ترميز المحرك",
   "droppedFrames": "الإطارات المسقطة",
   "videoBufferLiveNote": "تستخدم البثوث المباشرة دائمًا المخزن المنخفض",
-  "seekPreview": "معاينة موضع التشغيل"
+  "seekPreview": "معاينة موضع التشغيل",
+  "repeatAll": "تكرار قائمة التشغيل بالكامل",
+  "repeatShuffle": "تشغيل القائمة عشوائياً",
+  "repeatAllShort": "تكرار الكل",
+  "repeatShuffleShort": "عشوائي",
+  "skipShortsInAutoplay": "تخطي Shorts في التشغيل التلقائي",
+  "skipShortsInAutoplaySubtitle": "عدم المتابعة تلقائياً إلى مقطع قصير",
+  "upNextIn": "التالي بعد {seconds} ث",
+  "@upNextIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "playNow": "تشغيل الآن",
+  "replay": "إعادة التشغيل"
 }

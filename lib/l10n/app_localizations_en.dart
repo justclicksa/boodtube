@@ -1,6 +1,5 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -1213,4 +1212,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get seekPreview => 'Seek preview';
+
+  @override
+  String get repeatAll => 'Loop the whole queue';
+
+  @override
+  String get repeatShuffle => 'Shuffle the queue';
+
+  @override
+  String get repeatAllShort => 'Repeat all';
+
+  @override
+  String get repeatShuffleShort => 'Shuffle';
+
+  @override
+  String get skipShortsInAutoplay => 'Skip Shorts in autoplay';
+
+  @override
+  String get skipShortsInAutoplaySubtitle =>
+      'Never continue automatically into a Short';
+
+  @override
+  String upNextIn(int seconds) {
+    return 'Up next in $seconds s';
+  }
+
+  @override
+  String get playNow => 'Play now';
+
+  @override
+  String get replay => 'Replay';
 }
