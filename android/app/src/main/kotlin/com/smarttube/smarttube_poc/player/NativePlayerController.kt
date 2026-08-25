@@ -312,6 +312,7 @@ class NativePlayerController(
      */
     fun selectVideoTrack(height: Int?, codec: String?) {
         preferredHeight = height
+        Log.i(TAG, "selectVideoTrack: height=${height ?: "auto"} codec=${codec ?: "any"}")
         applyHeightLimit(height, codec)
     }
 
@@ -567,6 +568,11 @@ class NativePlayerController(
         val format = exo.videoFormat ?: return
         if (format == lastReportedFormat) return
         lastReportedFormat = format
+        Log.i(
+            TAG,
+            "format now: ${format.height}p ${shortCodec(format)} " +
+                "${format.bitrate}bps source=$currentSourceKind",
+        )
         events(
             mapOf(
                 "event" to "format",

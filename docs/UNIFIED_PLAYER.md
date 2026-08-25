@@ -157,7 +157,62 @@ modules work at runtime. Resolution was verified on the emulator against
 `dQw4w9WgXcQ`, `jNQXAC9IVRw` and `9bZkp7q19f0` before any playback code was
 trusted.
 
+## What was verified on the emulator
+
+API 34 x86_64 (`fitness` AVD), debug build. Screenshots were read back to
+confirm frames, not just that the app had not crashed.
+
+| | result |
+|---|---|
+| `dQw4w9WgXcQ` | plays, `source=dash`, 1080p AV1 |
+| `LXb3EKWsInQ` (4K 60fps) | plays, `source=dash`, 720p→1080p H.264 |
+| `9bZkp7q19f0` | plays, `source=dash`, 720p H.264 |
+| Quality menu | full ladder from the platform `tracks` event: Auto/2160p/1440p/1080p/720p/480p/360p/240p/144p |
+| Quality switch mid-play | `selectVideoTrack: height=1080` with **no second `open`** — an in-place track change; `format now: 720p avc` → `1080p avc` |
+| Background → foreground | process survives, video track dropped and restored, picture comes back |
+| Engine setting | flipping it to `mpv` stops the native engine being used at all; mpv plays the same videos |
+
+The AV1 case is worth keeping: this emulator has only a *software* AV1
+decoder, and ExoPlayer handled that correctly — it excluded 4K AV1
+(`MediaCodecInfo: NoSupport [sizeAndRate.support, 3840x2160x25.0]
+[c2.android.av1.decoder]`) and picked a rendition the device can actually
+decode, rather than going black. That failure mode — a codec the hardware
+cannot take, silently producing sound and no picture — is one of the
+reasons for moving off `vo=mediacodec_embed`.
+
 ## Known gaps
+
+- **Live streams do not play, on either engine.** On the native engine
+  MediaServiceCore's `getFormatInfo` returns `null` for every live id
+  tried (`jfKfPfyJRdk`, `21X5lGlDOfg`), so the format ladder is never
+  reached: `open jfKfPfyJRdk failed: resolve_failed: No format info for
+  this video`. On mpv the same ids reach the error screen too, so this is
+  **not** a regression from the engine work — but it does mean the live
+  path is unverified end to end. The next thing to look at is
+  `YouTubeMediaItemService.getFormatInfo`, which returns null when
+  `getVideoInfoService().getVideoInfo()` does; SmartTube itself may be
+  passing the `clickTrackingParams` overload, or relying on
+  initialisation this integration does not perform.
+- **Subtitles are unverified on the native engine.** The caption list in
+  the picker comes from the Dart metadata, while selection goes to
+  ExoPlayer's text renderer as a group override. None of the videos used
+  for verification carried captions, so the two halves have not been seen
+  working together.
+- **Picture-in-picture is unverified on the native engine.** It is
+  untouched by this change and the surface is a Flutter texture either
+  way, but it was not exercised.
+- **The caption presets do not reach the native engine.** `SubtitleStyle`
+  maps onto media_kit's `SubtitleViewConfiguration`; ExoPlayer draws its
+  own captions on the platform side and ignores it.
+- **The engine stats panel is mpv-only.** `playerEngineStatsProvider`
+  reads mpv properties (`demuxer-cache-duration`, `hwdec-current`,
+  `frame-drop-count`) straight off `mediaPlayerProvider`, so it reports
+  nothing on the native engine. The EventChannel's `format` event already
+  carries codec, bitrate, resolution and the ladder rung; wiring the panel
+  to that is the fix.
+- **Audio delay and pitch correction are mpv-only.** Both are mpv
+  properties with no ExoPlayer 2.10 equivalent; `NativeEngine.applyTuning`
+  forwards only the buffer preset and drops them.
 
 - **`TrackErrorFixer` is not wired in.** It repairs a track selection after a
   mid-stream load error and needs `TrackSelectorManager`, which was not ported.
