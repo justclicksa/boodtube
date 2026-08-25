@@ -19,7 +19,7 @@ import '../../domain/repositories/local_library_repository.dart';
 import '../../services/audio_player_handler.dart';
 import '../../services/history_sync.dart';
 import 'auth_providers.dart';
-import 'content_providers.dart' show cachedMediaItem;
+import 'content_providers.dart' show cachedMediaItem, relatedVideosProvider;
 import 'repository_providers.dart';
 import 'settings_providers.dart';
 
@@ -403,8 +403,10 @@ class PlayerController extends StateNotifier<PlayerStateData>
         await _player.play();
       case RepeatMode.none:
         await _saveCurrentPosition();
-        // Continue with whatever the user queued up.
-        await playNextInQueue();
+        // Continue with whatever the user queued up, then with YouTube's
+        // own "Up next" when the queue is empty and autoplay is on.
+        if (await playNextInQueue()) return;
+        await _playRelatedIfEnabled();
       case RepeatMode.pause:
         await _saveCurrentPosition();
     }
@@ -539,7 +541,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
       final resolved = await retryPlaybackOperation(
         () => _openStreams(
           videoId,
-          exactHeight: channelPreferences?.qualityHeight,
+          exactHeight: channelPreferences?.qualityHeight ?? _autoHeight(),
           audioTrackId: channelPreferences?.audioTrackId,
         ),
         shouldRetry: isRetryablePlaybackError,
@@ -653,6 +655,9 @@ class PlayerController extends StateNotifier<PlayerStateData>
         .timeout(const Duration(seconds: 60));
     debugPrint('openStreams: resolved in ${sw.elapsedMilliseconds}ms '
         '(${resolved.qualityLabel}, audio: ${resolved.audioUrl != null})');
+    if (resolved.availableHeights.isNotEmpty) {
+      _lastAvailableHeights = resolved.availableHeights;
+    }
 
     // Relay through the loopback proxy: mpv's bundled TLS cannot reach
     // googlevideo reliably, Dart's HTTP stack can.
@@ -786,10 +791,27 @@ class PlayerController extends StateNotifier<PlayerStateData>
     return int.tryParse(RegExp(r'(\d+)').firstMatch(label)?.group(1) ?? '');
   }
 
-  Future<void> switchQuality(int height) async {
+  /// Hands resolution back to the throughput heuristic. Re-opens at the
+  /// rung it would pick now when that differs from what is playing.
+  Future<void> selectAutoQuality() async {
+    await _ref.read(settingsControllerProvider.notifier).setAutoQuality(true);
+    unawaited(_rememberChannel(clearQualityHeight: true));
+    final target = _autoHeight();
+    if (target != null && target != _currentHeight()) {
+      await switchQuality(target, manual: false);
+    }
+  }
+
+  Future<void> switchQuality(int height, {bool manual = true}) async {
     final item = state.currentItem;
     if (item == null || _switchingQuality) return;
     _switchingQuality = true;
+    if (manual) {
+      // An explicit pick is a statement: stop second-guessing it.
+      unawaited(
+        _ref.read(settingsControllerProvider.notifier).setAutoQuality(false),
+      );
+    }
 
     final resumeFrom = state.position;
     final wasPlaying = state.isPlaying;
@@ -909,30 +931,100 @@ class PlayerController extends StateNotifier<PlayerStateData>
   /// Queue management — "play next"/"add to queue" from a video's menu.
   void enqueue(MediaItem item) {
     if (state.queue.any((q) => q.videoId == item.videoId)) return;
-    state = state.copyWith(queue: [...state.queue, item]);
+    _setQueue([...state.queue, item]);
   }
 
   void playNext(MediaItem item) {
     final rest = state.queue.where((q) => q.videoId != item.videoId).toList();
-    state = state.copyWith(queue: [item, ...rest]);
+    _setQueue([item, ...rest]);
   }
 
   void removeFromQueue(String videoId) {
-    state = state.copyWith(
-      queue: state.queue.where((q) => q.videoId != videoId).toList(),
-    );
+    _setQueue(state.queue.where((q) => q.videoId != videoId).toList());
   }
 
-  void clearQueue() => state = state.copyWith(queue: const []);
+  void clearQueue() => _setQueue(const []);
+
+  /// Every queue change goes through here so the notification's "next"
+  /// button appears and disappears with it.
+  void _setQueue(List<MediaItem> queue) {
+    state = state.copyWith(queue: queue);
+    _syncSkipControls();
+  }
+
+  void _syncSkipControls() {
+    final handler = _ref.read(audioHandlerProvider);
+    handler.onSkipNext = state.queue.isEmpty ? null : playNextInQueue;
+    handler.refreshControls();
+  }
 
   /// Starts the next queued video, removing it from the queue.
   Future<bool> playNextInQueue() async {
     if (state.queue.isEmpty) return false;
     final next = state.queue.first;
-    state = state.copyWith(queue: state.queue.skip(1).toList());
+    _setQueue(state.queue.skip(1).toList());
     await loadVideo(next.videoId);
     return true;
   }
+
+  /// Autoplay: continues with the first related video that is not the
+  /// one just finished. Silent when the setting is off, the video was
+  /// live, or the related list failed to load.
+  Future<void> _playRelatedIfEnabled() async {
+    final item = state.currentItem;
+    if (item == null || item.isLive) return;
+    if (!_ref.read(settingsControllerProvider).autoplayNext) return;
+    try {
+      final related =
+          await _ref.read(relatedVideosProvider(item.videoId).future);
+      final next = related
+          .where((v) => v.videoId != item.videoId && !v.isLive)
+          .firstOrNull;
+      if (next == null) return;
+      debugPrint('autoplay: continuing with ${next.videoId}');
+      await loadVideo(next.videoId);
+    } catch (e) {
+      debugPrint('autoplay: related list unavailable: $e');
+    }
+  }
+
+  /// Rungs used by auto quality. Anything below the floor plays 360p;
+  /// the ladder is deliberately conservative because the loopback relay
+  /// adds overhead a direct connection would not.
+  static const _autoQualityLadder = <(double, int)>[
+    (25, 2160),
+    (12, 1440),
+    (6, 1080),
+    (3, 720),
+    (1.5, 480),
+  ];
+
+  static int? autoHeightForMbps(double mbps, List<int> available) {
+    if (mbps <= 0 || available.isEmpty) return null;
+    var target = 360;
+    for (final (minMbps, height) in _autoQualityLadder) {
+      if (mbps >= minMbps) {
+        target = height;
+        break;
+      }
+    }
+    // Highest offered rung that does not exceed the target.
+    final sorted = [...available]..sort((a, b) => b.compareTo(a));
+    return sorted.where((h) => h <= target).firstOrNull ?? sorted.last;
+  }
+
+  /// Auto quality only has something to go on once bytes have flowed, so
+  /// the first video of a session opens at the fixed preference and the
+  /// next ones use what the relay measured.
+  int? _autoHeight() {
+    if (!_ref.read(settingsControllerProvider).autoQuality) return null;
+    final mbps = _ref.read(streamProxyProvider).transferMbps;
+    return autoHeightForMbps(mbps, _lastAvailableHeights);
+  }
+
+  /// Heights offered by the previous resolve, kept across videos as the
+  /// best available guess for what the next one will offer.
+  List<int> _lastAvailableHeights = const [];
 
   void setSeekInterval(Duration interval) {
     state = state.copyWith(seekInterval: interval);
@@ -1040,6 +1132,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
     double? subtitleBackgroundOpacity,
     String? videoFit,
     bool clearSubtitle = false,
+    bool clearQualityHeight = false,
   }) async {
     final channelId = state.currentItem?.channelId;
     if (channelId == null || channelId.isEmpty) return;
@@ -1058,6 +1151,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
         subtitleBackgroundOpacity: subtitleBackgroundOpacity,
         videoFit: videoFit,
         clearSubtitle: clearSubtitle,
+        clearQualityHeight: clearQualityHeight,
       ),
     );
   }
@@ -1159,6 +1253,14 @@ class PlayerController extends StateNotifier<PlayerStateData>
     switch (lifecycleState) {
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
+        // PiP keeps the surface on screen, so nothing is suspended.
+        if (state.isPiPActive) return;
+        if (!_ref.read(settingsControllerProvider).backgroundPlayback) {
+          // Same as the official app with background play off: stop at
+          // the door, resume where it left off when the user comes back.
+          if (state.isPlaying) unawaited(_player.pause());
+          return;
+        }
         if (_videoSuspended) return;
         _videoSuspended = true;
         unawaited(_player.setVideoTrack(VideoTrack.no()));

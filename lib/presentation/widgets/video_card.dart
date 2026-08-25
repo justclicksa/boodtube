@@ -22,6 +22,7 @@ import '../../domain/entities/media_item.dart';
 import '../../l10n/app_localizations.dart';
 import '../providers/downloads_providers.dart';
 import '../providers/local_library_providers.dart';
+import '../providers/player_providers.dart';
 import '../providers/settings_providers.dart';
 import '../theme/app_theme.dart';
 
@@ -373,6 +374,31 @@ class _VideoMenu extends ConsumerWidget {
               ),
             ),
             const Divider(height: 1),
+            // Queue controls. Neither needs a video to be playing: the
+            // queue is consumed when the current one ends, or when the
+            // next one is opened.
+            _MenuRow(
+              icon: Icons.playlist_play,
+              label: l10n.playNext,
+              onTap: () {
+                ref.read(playerControllerProvider.notifier).playNext(item);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(l10n.addedToQueue)),
+                );
+                close();
+              },
+            ),
+            _MenuRow(
+              icon: Icons.queue_music,
+              label: l10n.addToQueue,
+              onTap: () {
+                ref.read(playerControllerProvider.notifier).enqueue(item);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(l10n.addedToQueue)),
+                );
+                close();
+              },
+            ),
             _MenuRow(
               icon: isSaved ? Icons.playlist_add_check : Icons.playlist_add,
               label: l10n.watchLater,

@@ -152,6 +152,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         ref.read(playerControllerProvider.notifier).setPiPActive(active);
         setState(() => _showControls = !active);
       },
+      // Home/Recents while a video is playing: shrink into PiP like the
+      // official app, when the setting allows it.
+      onUserLeaveHint: () {
+        if (!mounted) return;
+        final settings = ref.read(settingsControllerProvider);
+        final state = ref.read(playerControllerProvider);
+        if (!settings.pictureInPictureEnabled ||
+            !PiPManager.isAvailableOnThisPlatform ||
+            state.isPiPActive ||
+            !state.isPlaying ||
+            state.currentItem == null) {
+          return;
+        }
+        unawaited(PiPManager.enterPiP());
+      },
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -554,6 +569,11 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
       };
 
   void _onDoubleTap(Offset globalPosition) {
+    if (!ref.read(settingsControllerProvider).doubleTapToSeek) {
+      // With the gesture off, a double tap is just two taps.
+      widget.onToggleControls();
+      return;
+    }
     final controller = ref.read(playerControllerProvider.notifier);
     final width = MediaQuery.sizeOf(context).width;
     final isBack = globalPosition.dx < width / 2;
@@ -994,7 +1014,9 @@ class _ControlsOverlay extends ConsumerWidget {
                 // but show an apology.
                 for (final action in quickActions)
                   if (action != PlayerQuickAction.pictureInPicture ||
-                      PiPManager.isAvailableOnThisPlatform)
+                      (PiPManager.isAvailableOnThisPlatform &&
+                          ref.watch(settingsControllerProvider
+                              .select((s) => s.pictureInPictureEnabled))))
                     _QuickActionButton(
                       action: action,
                       item: state.currentItem,
@@ -1283,10 +1305,33 @@ class _ScrubBarState extends ConsumerState<_ScrubBar> {
               ],
             ),
           ),
-          Text(
-            DurationFormatter.format(state.duration),
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-          ),
+          // Total duration, or the time left — tapping flips between the
+          // two, and the choice sticks (the "remaining time" setting).
+          Builder(builder: (context) {
+            final showRemaining = ref.watch(
+              settingsControllerProvider.select((s) => s.showRemainingTime),
+            );
+            final remaining =
+                state.duration - Duration(milliseconds: value.toInt());
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                widget.onInteract();
+                ref
+                    .read(settingsControllerProvider.notifier)
+                    .setShowRemainingTime(!showRemaining);
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  showRemaining
+                      ? '-${DurationFormatter.format(remaining)}'
+                      : DurationFormatter.format(state.duration),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            );
+          }),
           IconButton(
             tooltip: state.isFullscreen ? l10n.exitFullscreen : l10n.fullscreen,
             icon: Icon(

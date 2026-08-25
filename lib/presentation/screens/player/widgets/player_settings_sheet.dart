@@ -244,11 +244,25 @@ class _QualityMenu extends ConsumerWidget {
     final current = state.currentQualityLabel;
     final pending = state.pendingHeight;
     final heights = state.availableHeights;
+    final auto = ref.watch(
+      settingsControllerProvider.select((s) => s.autoQuality),
+    );
 
     return _SubSheet(
       onBack: onBack,
       title: l10n.quality,
       children: [
+        if (heights.isNotEmpty)
+          _CheckRow(
+            label: auto && current != null
+                ? '${l10n.autoQualityLabel} ($current)'
+                : l10n.autoQualityLabel,
+            selected: auto && pending == null,
+            onTap: () {
+              Navigator.of(context).pop();
+              ref.read(playerControllerProvider.notifier).selectAutoQuality();
+            },
+          ),
         if (heights.isEmpty)
           ListTile(
             title: Text(
@@ -263,7 +277,7 @@ class _QualityMenu extends ConsumerWidget {
             // the resolution still playing.
             selected: pending != null
                 ? pending == h
-                : current != null && current.startsWith('${h}p'),
+                : !auto && current != null && current.startsWith('${h}p'),
             trailing: pending == h
                 ? const SizedBox(
                     width: AppSpacing.lg,

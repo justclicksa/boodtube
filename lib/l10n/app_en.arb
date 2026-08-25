@@ -530,5 +530,13 @@
   "subtitleAppearance": "Subtitle appearance",
   "subtitleSize": "Text size",
   "subtitlePosition": "Vertical position",
-  "subtitleBackground": "Background"
+  "subtitleBackground": "Background",
+  "playNext": "Play next",
+  "addToQueue": "Add to queue",
+  "addedToQueue": "Added to queue",
+  "autoplayNext": "Autoplay",
+  "autoplayNextSubtitle": "Continue with the next suggested video",
+  "autoQuality": "Auto quality",
+  "autoQualitySubtitle": "Pick resolution from your connection speed",
+  "autoQualityLabel": "Auto"
 }

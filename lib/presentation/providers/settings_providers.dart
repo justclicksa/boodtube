@@ -72,6 +72,16 @@ class SettingsController extends StateNotifier<AppSettings> {
     await _repo.setBackgroundPlayback(enabled);
   }
 
+  Future<void> setAutoplayNext(bool enabled) async {
+    state = state.copyWith(autoplayNext: enabled);
+    await _repo.setAutoplayNext(enabled);
+  }
+
+  Future<void> setAutoQuality(bool enabled) async {
+    state = state.copyWith(autoQuality: enabled);
+    await _repo.setAutoQuality(enabled);
+  }
+
   Future<void> setDoubleTapToSeek(bool enabled) async {
     state = state.copyWith(doubleTapToSeek: enabled);
     await _repo.setDoubleTapToSeek(enabled);

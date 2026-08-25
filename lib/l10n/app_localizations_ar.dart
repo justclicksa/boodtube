@@ -1136,4 +1136,28 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get subtitleBackground => 'الخلفية';
+
+  @override
+  String get playNext => 'تشغيل التالي';
+
+  @override
+  String get addToQueue => 'إضافة إلى القائمة';
+
+  @override
+  String get addedToQueue => 'أُضيف إلى القائمة';
+
+  @override
+  String get autoplayNext => 'التشغيل التلقائي';
+
+  @override
+  String get autoplayNextSubtitle => 'المتابعة بالمقطع المقترح التالي';
+
+  @override
+  String get autoQuality => 'جودة تلقائية';
+
+  @override
+  String get autoQualitySubtitle => 'اختيار الدقة حسب سرعة الاتصال';
+
+  @override
+  String get autoQualityLabel => 'تلقائي';
 }

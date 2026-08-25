@@ -509,5 +509,13 @@
   "subtitleAppearance": "مظهر الترجمة",
   "subtitleSize": "حجم النص",
   "subtitlePosition": "الموضع الرأسي",
-  "subtitleBackground": "الخلفية"
+  "subtitleBackground": "الخلفية",
+  "playNext": "تشغيل التالي",
+  "addToQueue": "إضافة إلى القائمة",
+  "addedToQueue": "أُضيف إلى القائمة",
+  "autoplayNext": "التشغيل التلقائي",
+  "autoplayNextSubtitle": "المتابعة بالمقطع المقترح التالي",
+  "autoQuality": "جودة تلقائية",
+  "autoQualitySubtitle": "اختيار الدقة حسب سرعة الاتصال",
+  "autoQualityLabel": "تلقائي"
 }

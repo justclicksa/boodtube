@@ -59,6 +59,10 @@ class SmartTubeAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> Function()? onSkipNext;
   Future<void> Function()? onSkipPrevious;
 
+  /// Re-publishes the control row after [onSkipNext]/[onSkipPrevious]
+  /// change, so the notification gains or loses its skip buttons.
+  void refreshControls() => _publish();
+
   void _publish({bool? playing}) {
     final isPlaying = playing ?? _player.state.playing;
     playbackState.add(

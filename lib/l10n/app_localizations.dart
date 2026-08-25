@@ -2053,6 +2053,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Background'**
   String get subtitleBackground;
+
+  /// No description provided for @playNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Play next'**
+  String get playNext;
+
+  /// No description provided for @addToQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to queue'**
+  String get addToQueue;
+
+  /// No description provided for @addedToQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Added to queue'**
+  String get addedToQueue;
+
+  /// No description provided for @autoplayNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Autoplay'**
+  String get autoplayNext;
+
+  /// No description provided for @autoplayNextSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with the next suggested video'**
+  String get autoplayNextSubtitle;
+
+  /// No description provided for @autoQuality.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto quality'**
+  String get autoQuality;
+
+  /// No description provided for @autoQualitySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick resolution from your connection speed'**
+  String get autoQualitySubtitle;
+
+  /// No description provided for @autoQualityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get autoQualityLabel;
 }
 
 class _AppLocalizationsDelegate

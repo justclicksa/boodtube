@@ -217,6 +217,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           _SettingsRow(
+            keywords: [l10n.autoplayNext, l10n.autoplayNextSubtitle],
+            widget: SwitchListTile(
+              secondary: const Icon(Icons.skip_next),
+              title: Text(l10n.autoplayNext),
+              subtitle: Text(l10n.autoplayNextSubtitle),
+              value: settings.autoplayNext,
+              onChanged: controller.setAutoplayNext,
+            ),
+          ),
+          _SettingsRow(
+            keywords: [l10n.autoQuality, l10n.autoQualitySubtitle],
+            widget: SwitchListTile(
+              secondary: const Icon(Icons.hd),
+              title: Text(l10n.autoQuality),
+              subtitle: Text(l10n.autoQualitySubtitle),
+              value: settings.autoQuality,
+              onChanged: controller.setAutoQuality,
+            ),
+          ),
+          _SettingsRow(
             keywords: [l10n.doubleTapToSeek, l10n.doubleTapToSeekSubtitle],
             widget: SwitchListTile(
               secondary: const Icon(Icons.touch_app),

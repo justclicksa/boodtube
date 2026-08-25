@@ -55,10 +55,12 @@ class ChannelPlaybackPreferences {
     double? subtitleBackgroundOpacity,
     String? videoFit,
     bool clearSubtitle = false,
+    bool clearQualityHeight = false,
   }) =>
       ChannelPlaybackPreferences(
         speed: speed ?? this.speed,
-        qualityHeight: qualityHeight ?? this.qualityHeight,
+        qualityHeight:
+            clearQualityHeight ? null : (qualityHeight ?? this.qualityHeight),
         subtitleCode:
             clearSubtitle ? null : (subtitleCode ?? this.subtitleCode),
         audioTrackId: audioTrackId ?? this.audioTrackId,
@@ -123,6 +125,13 @@ class AppSettings {
   /// Show the time left instead of the total duration.
   final bool showRemainingTime;
 
+  /// When the queue is empty, continue with the first "Up next" video.
+  final bool autoplayNext;
+
+  /// Pick the opening resolution from measured throughput instead of the
+  /// fixed [defaultQuality] cap, and step down on stalls.
+  final bool autoQuality;
+
   /// Ordered shortcuts shown in the player's top bar. The settings gear
   /// is always retained as an escape hatch even if an old backup omits it.
   final List<PlayerQuickAction> playerQuickActions;
@@ -150,6 +159,8 @@ class AppSettings {
     this.clickbaitThumbnail = ClickbaitThumbnail.original,
     this.deArrowEnabled = false,
     this.showRemainingTime = false,
+    this.autoplayNext = true,
+    this.autoQuality = true,
     this.playerQuickActions = const [
       PlayerQuickAction.cast,
       PlayerQuickAction.pictureInPicture,
@@ -175,6 +186,8 @@ class AppSettings {
     ClickbaitThumbnail? clickbaitThumbnail,
     bool? deArrowEnabled,
     bool? showRemainingTime,
+    bool? autoplayNext,
+    bool? autoQuality,
     List<PlayerQuickAction>? playerQuickActions,
   }) {
     return AppSettings(
@@ -195,6 +208,8 @@ class AppSettings {
       clickbaitThumbnail: clickbaitThumbnail ?? this.clickbaitThumbnail,
       deArrowEnabled: deArrowEnabled ?? this.deArrowEnabled,
       showRemainingTime: showRemainingTime ?? this.showRemainingTime,
+      autoplayNext: autoplayNext ?? this.autoplayNext,
+      autoQuality: autoQuality ?? this.autoQuality,
       playerQuickActions: playerQuickActions ?? this.playerQuickActions,
     );
   }
@@ -220,6 +235,8 @@ class SettingsRepository {
   static const _keyClickbait = 'settings.clickbait_thumbnail';
   static const _keyDeArrow = 'settings.dearrow';
   static const _keyRemainingTime = 'settings.remaining_time';
+  static const _keyAutoplayNext = 'settings.autoplay_next';
+  static const _keyAutoQuality = 'settings.auto_quality';
   static const _keyPlayerQuickActions = 'settings.player_quick_actions';
   static const _keyChannelPlayback = 'settings.channel_playback';
 
@@ -249,6 +266,8 @@ class SettingsRepository {
       ),
       deArrowEnabled: _prefs.getBool(_keyDeArrow) ?? false,
       showRemainingTime: _prefs.getBool(_keyRemainingTime) ?? false,
+      autoplayNext: _prefs.getBool(_keyAutoplayNext) ?? true,
+      autoQuality: _prefs.getBool(_keyAutoQuality) ?? true,
       playerQuickActions: _readPlayerQuickActions(),
     );
   }
@@ -267,6 +286,14 @@ class SettingsRepository {
 
   Future<void> setBackgroundPlayback(bool enabled) async {
     await _prefs.setBool(_keyBackgroundPlayback, enabled);
+  }
+
+  Future<void> setAutoplayNext(bool enabled) async {
+    await _prefs.setBool(_keyAutoplayNext, enabled);
+  }
+
+  Future<void> setAutoQuality(bool enabled) async {
+    await _prefs.setBool(_keyAutoQuality, enabled);
   }
 
   Future<void> setSponsorBlockEnabled(bool enabled) async {

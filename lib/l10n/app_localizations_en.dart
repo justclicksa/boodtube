@@ -1122,4 +1122,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get subtitleBackground => 'Background';
+
+  @override
+  String get playNext => 'Play next';
+
+  @override
+  String get addToQueue => 'Add to queue';
+
+  @override
+  String get addedToQueue => 'Added to queue';
+
+  @override
+  String get autoplayNext => 'Autoplay';
+
+  @override
+  String get autoplayNextSubtitle => 'Continue with the next suggested video';
+
+  @override
+  String get autoQuality => 'Auto quality';
+
+  @override
+  String get autoQualitySubtitle =>
+      'Pick resolution from your connection speed';
+
+  @override
+  String get autoQualityLabel => 'Auto';
 }

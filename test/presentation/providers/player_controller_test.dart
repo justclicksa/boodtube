@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smarttube_poc/presentation/providers/player_providers.dart';
 
 void main() {
+  autoQualityTests();
   group('PlayerStateData', () {
     test('initial state is empty', () {
       const state = PlayerStateData();
@@ -42,6 +43,32 @@ void main() {
       const initial = PlayerStateData();
       final cleared = initial.copyWith(clearItem: true);
       expect(cleared.currentItem, isNull);
+    });
+  });
+}
+
+void autoQualityTests() {
+  group('PlayerController.autoHeightForMbps', () {
+    const offered = [2160, 1440, 1080, 720, 480, 360, 240, 144];
+
+    test('has no opinion before any bytes have flowed', () {
+      expect(PlayerController.autoHeightForMbps(0, offered), isNull);
+      expect(PlayerController.autoHeightForMbps(10, const []), isNull);
+    });
+
+    test('maps throughput onto the ladder', () {
+      expect(PlayerController.autoHeightForMbps(30, offered), 2160);
+      expect(PlayerController.autoHeightForMbps(12, offered), 1440);
+      expect(PlayerController.autoHeightForMbps(7, offered), 1080);
+      expect(PlayerController.autoHeightForMbps(3.5, offered), 720);
+      expect(PlayerController.autoHeightForMbps(2, offered), 480);
+      expect(PlayerController.autoHeightForMbps(0.5, offered), 360);
+    });
+
+    test('never picks a rung the video does not offer', () {
+      expect(PlayerController.autoHeightForMbps(30, const [1080, 720]), 1080);
+      expect(PlayerController.autoHeightForMbps(2, const [1080, 720]), 720);
+      expect(PlayerController.autoHeightForMbps(0.5, const [1080]), 1080);
     });
   });
 }
