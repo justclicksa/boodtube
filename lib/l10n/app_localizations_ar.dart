@@ -1160,4 +1160,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get autoQualityLabel => 'تلقائي';
+
+  @override
+  String get seekPreview => 'معاينة موضع التشغيل';
 }

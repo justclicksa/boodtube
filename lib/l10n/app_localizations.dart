@@ -2101,6 +2101,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Auto'**
   String get autoQualityLabel;
+
+  /// No description provided for @seekPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Seek preview'**
+  String get seekPreview;
 }
 
 class _AppLocalizationsDelegate

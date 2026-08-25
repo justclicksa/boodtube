@@ -15,6 +15,7 @@ import 'package:smarttube_poc/data/youtube/channel_browse_client.dart';
 import 'package:smarttube_poc/data/youtube/comments_service.dart';
 import 'package:smarttube_poc/data/youtube/return_dislike_service.dart';
 import 'package:smarttube_poc/data/youtube/innertube_client.dart';
+import 'package:smarttube_poc/data/youtube/storyboard_service.dart';
 import 'package:smarttube_poc/data/youtube/stream_resolver.dart';
 import 'package:smarttube_poc/data/repositories/content_repository_impl.dart';
 import 'package:smarttube_poc/data/repositories/media_item_repository_impl.dart';
@@ -114,6 +115,20 @@ final dioProvider = Provider<Dio>((ref) {
 /// SponsorBlock service
 final sponsorBlockServiceProvider = Provider<SponsorBlockService>((ref) {
   return SponsorBlockService(ref.watch(dioProvider));
+});
+
+/// Seek-preview thumbnail sheets (storyboards).
+final storyboardServiceProvider = Provider<StoryboardService>((ref) {
+  return StoryboardService(ref.watch(dioProvider));
+});
+
+/// The storyboard for one video, or null when YouTube serves none.
+///
+/// Kept alive for the session: the spec is a few hundred bytes and the
+/// same video is scrubbed over and over.
+final videoStoryboardProvider =
+    FutureProvider.family<StoryboardSpec?, String>((ref, videoId) {
+  return ref.watch(storyboardServiceProvider).getStoryboard(videoId);
 });
 
 /// Drift database (singleton)

@@ -1147,4 +1147,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get autoQualityLabel => 'Auto';
+
+  @override
+  String get seekPreview => 'Seek preview';
 }
