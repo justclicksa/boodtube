@@ -780,7 +780,10 @@ class PlayerController extends StateNotifier<PlayerStateData>
 
     debugPrint(
         'stream capped at ${current ?? "?"}p, stepping down to ${next}p');
-    unawaited(switchQuality(next));
+    // Not a manual pick: the stream was cut off, the user did not ask
+    // for a lower resolution. Passing this through as manual turned
+    // auto quality off for good after a single capped stream.
+    unawaited(switchQuality(next, manual: false));
     return true;
   }
 
@@ -850,7 +853,13 @@ class PlayerController extends StateNotifier<PlayerStateData>
             : 'client-fallback',
         clearPendingHeight: true,
       );
-      unawaited(_rememberChannel(qualityHeight: resolved.videoHeight));
+      // Only a deliberate pick is worth remembering for the channel. An
+      // automatic step-down — or the re-open that selecting "Auto" does —
+      // used to write its height here, which pinned the channel to that
+      // resolution and quietly defeated auto quality on the next video.
+      if (manual) {
+        unawaited(_rememberChannel(qualityHeight: resolved.videoHeight));
+      }
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -952,10 +961,35 @@ class PlayerController extends StateNotifier<PlayerStateData>
     _syncSkipControls();
   }
 
-  void _syncSkipControls() {
-    final handler = _ref.read(audioHandlerProvider);
-    handler.onSkipNext = state.queue.isEmpty ? null : playNextInQueue;
+  void _syncSkipControls() => _wireSkipControls(
+        state.queue.isEmpty ? null : playNextInQueue,
+      );
+
+  void _wireSkipControls(Future<void> Function()? onSkipNext) {
+    final handler = _audioHandler();
+    if (handler == null) return;
+    handler.onSkipNext = onSkipNext;
     handler.refreshControls();
+  }
+
+  /// The handler, held onto after the first successful read.
+  ///
+  /// dispose() runs while the container is already tearing down, and a
+  /// read from there throws — so the unwiring below would have been the
+  /// one call that never happened. Reading it eagerly in the constructor
+  /// is not an option either: audioHandlerProvider is a main()-time
+  /// override, and it throws wherever audio_service never came up.
+  SmartTubeAudioHandler? _cachedAudioHandler;
+
+  SmartTubeAudioHandler? _audioHandler() {
+    final cached = _cachedAudioHandler;
+    if (cached != null) return cached;
+    try {
+      return _cachedAudioHandler = _ref.read(audioHandlerProvider);
+    } catch (e) {
+      debugPrint('notification skip control unavailable: $e');
+      return null;
+    }
   }
 
   /// Starts the next queued video, removing it from the queue.
@@ -1019,7 +1053,13 @@ class PlayerController extends StateNotifier<PlayerStateData>
   int? _autoHeight() {
     if (!_ref.read(settingsControllerProvider).autoQuality) return null;
     final mbps = _ref.read(streamProxyProvider).transferMbps;
-    return autoHeightForMbps(mbps, _lastAvailableHeights);
+    // _lastAvailableHeights is only filled by a resolve, so a video that
+    // came from somewhere else (an offline copy) leaves it empty while
+    // the state still knows what the video offers.
+    final available = _lastAvailableHeights.isEmpty
+        ? state.availableHeights
+        : _lastAvailableHeights;
+    return autoHeightForMbps(mbps, available);
   }
 
   /// Heights offered by the previous resolve, kept across videos as the
@@ -1277,6 +1317,10 @@ class PlayerController extends StateNotifier<PlayerStateData>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // The handler outlives this notifier. Left wired, the notification's
+    // "next" button would call playNextInQueue on a disposed controller,
+    // which throws on the first `state =`.
+    _wireSkipControls(null);
     _savePositionTimer?.cancel();
     _sleepTimer?.cancel();
     _bufferRecoveryTimer?.cancel();

@@ -2,11 +2,32 @@
 // Tests for PlayerStateData (FIXED: no real Player, no dynamic implement)
 // ============================================================
 
+import 'package:audio_service/audio_service.dart' show MediaControl;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smarttube_poc/data/local/preferences/settings_repository_impl.dart';
+import 'package:smarttube_poc/domain/entities/media_item.dart';
 import 'package:smarttube_poc/presentation/providers/player_providers.dart';
+import 'package:smarttube_poc/presentation/providers/settings_providers.dart';
+
+import '../../support/player_container.dart';
+
+MediaItem _item(String videoId, {String channelId = 'UC-test'}) => MediaItem(
+      videoId: videoId,
+      title: videoId,
+      author: 'author',
+      channelId: channelId,
+      duration: const Duration(minutes: 3),
+      publishedAt: DateTime(2026),
+      formats: const [],
+      subtitles: const [],
+      chapters: const [],
+    );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   autoQualityTests();
+  queueTests();
+  autoQualitySelectionTests();
   group('PlayerStateData', () {
     test('initial state is empty', () {
       const state = PlayerStateData();
@@ -69,6 +90,101 @@ void autoQualityTests() {
       expect(PlayerController.autoHeightForMbps(30, const [1080, 720]), 1080);
       expect(PlayerController.autoHeightForMbps(2, const [1080, 720]), 720);
       expect(PlayerController.autoHeightForMbps(0.5, const [1080]), 1080);
+    });
+  });
+}
+
+void queueTests() {
+  group('PlayerController queue', () {
+    test('play next jumps ahead of what is already queued', () async {
+      final harness = await playerTestHarness();
+      harness.controller
+        ..enqueue(_item('a'))
+        ..enqueue(_item('b'))
+        ..playNext(_item('c'));
+
+      expect(harness.playerState.queue.map((q) => q.videoId), ['c', 'a', 'b']);
+    });
+
+    test('a video is never queued twice', () async {
+      final harness = await playerTestHarness();
+      harness.controller
+        ..enqueue(_item('a'))
+        ..enqueue(_item('a'));
+
+      expect(harness.playerState.queue, hasLength(1));
+    });
+
+    test('play next moves a video that is already queued', () async {
+      final harness = await playerTestHarness();
+      harness.controller
+        ..enqueue(_item('a'))
+        ..enqueue(_item('b'))
+        ..playNext(_item('b'));
+
+      expect(harness.playerState.queue.map((q) => q.videoId), ['b', 'a']);
+    });
+
+    test('the notification follows the queue in and out of existence',
+        () async {
+      final harness = await playerTestHarness();
+      List<MediaControl> controls() =>
+          harness.audioHandler.playbackState.value.controls;
+
+      harness.controller.enqueue(_item('a'));
+      expect(controls(), contains(MediaControl.skipToNext));
+
+      harness.controller.removeFromQueue('a');
+      expect(controls(), isNot(contains(MediaControl.skipToNext)));
+    });
+
+    test('a disposed controller lets go of the notification button',
+        () async {
+      // The handler outlives the controller. Left wired, the button
+      // would call into a disposed notifier and throw.
+      final harness = await playerTestHarness();
+      harness.controller.enqueue(_item('a'));
+      expect(harness.audioHandler.onSkipNext, isNotNull);
+
+      harness.container.dispose();
+      expect(harness.audioHandler.onSkipNext, isNull);
+      expect(
+        harness.audioHandler.playbackState.value.controls,
+        isNot(contains(MediaControl.skipToNext)),
+      );
+    });
+  });
+}
+
+void autoQualitySelectionTests() {
+  group('PlayerController.selectAutoQuality', () {
+    test('turns the setting back on and unpins the channel', () async {
+      final harness = await playerTestHarness();
+      final repository = harness.container.read(settingsRepositoryProvider);
+      await repository.saveChannelPlaybackPreferences(
+        'UC-test',
+        const ChannelPlaybackPreferences(speed: 1.5, qualityHeight: 1080),
+      );
+      await harness.container
+          .read(settingsControllerProvider.notifier)
+          .setAutoQuality(false);
+      // ignore: invalid_use_of_protected_member
+      harness.controller.state =
+          harness.controller.state.copyWith(currentItem: _item('a'));
+
+      await harness.controller.selectAutoQuality();
+
+      expect(
+        harness.container.read(settingsControllerProvider).autoQuality,
+        isTrue,
+      );
+      final stored = repository.channelPlaybackPreferences('UC-test');
+      expect(
+        stored?.qualityHeight,
+        isNull,
+        reason: 'a pinned height would defeat auto quality on this channel',
+      );
+      expect(stored?.speed, 1.5, reason: 'the rest of the channel is intact');
     });
   });
 }

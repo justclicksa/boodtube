@@ -12,7 +12,8 @@ import 'dart:async';
 // name in services/download_manager.dart.
 import 'package:cached_network_image/cached_network_image.dart'
     show CachedNetworkImageProvider;
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, visibleForTesting;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
@@ -1085,7 +1086,7 @@ class _ControlsOverlay extends ConsumerWidget {
               ),
 
             // Bottom bar
-            _ScrubBar(
+            PlayerScrubBar(
               state: state,
               onInteract: onInteract,
               onToggleFullscreen: onToggleFullscreen,
@@ -1204,12 +1205,16 @@ class _QuickActionButton extends StatelessWidget {
 
 /// Elapsed time, the scrubber and the fullscreen toggle.
 ///
+/// Public only so a widget test can pump it without the whole player
+/// screen (which needs a real libmpv behind it).
+///
 /// Owns the drag itself: the old slider seeked on every drag frame,
 /// which fired dozens of seeks for one sweep and stuttered the whole
 /// way. Here the thumb follows the finger locally and exactly one seek
 /// is issued on release.
-class _ScrubBar extends ConsumerStatefulWidget {
-  const _ScrubBar({
+@visibleForTesting
+class PlayerScrubBar extends ConsumerStatefulWidget {
+  const PlayerScrubBar({
     required this.state,
     required this.onInteract,
     required this.onToggleFullscreen,
@@ -1220,10 +1225,10 @@ class _ScrubBar extends ConsumerStatefulWidget {
   final VoidCallback onToggleFullscreen;
 
   @override
-  ConsumerState<_ScrubBar> createState() => _ScrubBarState();
+  ConsumerState<PlayerScrubBar> createState() => _PlayerScrubBarState();
 }
 
-class _ScrubBarState extends ConsumerState<_ScrubBar> {
+class _PlayerScrubBarState extends ConsumerState<PlayerScrubBar> {
   /// Position under the finger while dragging, in milliseconds. Null
   /// when not dragging, so playback drives the thumb.
   double? _scrubMs;
@@ -1241,6 +1246,14 @@ class _ScrubBarState extends ConsumerState<_ScrubBar> {
         .clamp(0, duration)
         .toDouble();
     final chapters = state.currentItem?.chapters ?? const <ChapterItem>[];
+    // Watched here rather than inside a nested Builder: a Builder's
+    // callback runs after this build() has returned, and this ref's
+    // subscriptions are reconciled when it returns — the dependency was
+    // being torn down and re-created on every position tick.
+    final showRemaining = ref.watch(
+      settingsControllerProvider.select((s) => s.showRemainingTime),
+    );
+    final remaining = state.duration - Duration(milliseconds: value.toInt());
 
     return Padding(
       padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 6),
@@ -1307,31 +1320,29 @@ class _ScrubBarState extends ConsumerState<_ScrubBar> {
           ),
           // Total duration, or the time left — tapping flips between the
           // two, and the choice sticks (the "remaining time" setting).
-          Builder(builder: (context) {
-            final showRemaining = ref.watch(
-              settingsControllerProvider.select((s) => s.showRemainingTime),
-            );
-            final remaining =
-                state.duration - Duration(milliseconds: value.toInt());
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                widget.onInteract();
-                ref
-                    .read(settingsControllerProvider.notifier)
-                    .setShowRemainingTime(!showRemaining);
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  showRemaining
-                      ? '-${DurationFormatter.format(remaining)}'
-                      : DurationFormatter.format(state.duration),
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              widget.onInteract();
+              ref
+                  .read(settingsControllerProvider.notifier)
+                  .setShowRemainingTime(!showRemaining);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                showRemaining
+                    ? '-${DurationFormatter.format(remaining)}'
+                    : DurationFormatter.format(state.duration),
+                // In Arabic the leading '-' is a neutral character at the
+                // start of an RTL run, so it renders after the digits
+                // ("1:23-"). The timestamp is a left-to-right run in every
+                // locale — say so rather than let the paragraph decide.
+                textDirection: TextDirection.ltr,
+                style: const TextStyle(color: Colors.white, fontSize: 12),
               ),
-            );
-          }),
+            ),
+          ),
           IconButton(
             tooltip: state.isFullscreen ? l10n.exitFullscreen : l10n.fullscreen,
             icon: Icon(

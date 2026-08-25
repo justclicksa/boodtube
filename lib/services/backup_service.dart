@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,13 +29,31 @@ class BackupService {
   final AppDatabase _database;
   final SharedPreferences _preferences;
 
-  Future<void> shareBackup() async {
-    final database = await _database.exportPortableData();
+  /// Everything under the `settings.` namespace, exactly as stored.
+  ///
+  /// Deliberately key-driven rather than a field-by-field mapping: a
+  /// setting added to the settings repository is in the backup the day
+  /// it is added, without anyone having to remember this file.
+  @visibleForTesting
+  Map<String, Object?> exportSettings() {
     final settings = <String, Object?>{};
     for (final key in _preferences.getKeys()) {
       if (!key.startsWith('settings.')) continue;
       settings[key] = _preferences.get(key);
     }
+    return settings;
+  }
+
+  @visibleForTesting
+  Future<void> restoreSettings(Map<String, Object?> settings) async {
+    for (final entry in settings.entries) {
+      await _restorePreference(entry.key, entry.value);
+    }
+  }
+
+  Future<void> shareBackup() async {
+    final database = await _database.exportPortableData();
+    final settings = exportSettings();
     final payload = <String, Object?>{
       'format': 'boodtube-backup',
       'version': 1,
@@ -70,11 +89,9 @@ class BackupService {
     }
 
     final database = Map<String, Object?>.from(payload['database'] as Map);
-    final settings = Map<String, dynamic>.from(payload['settings'] as Map);
+    final settings = Map<String, Object?>.from(payload['settings'] as Map);
     await _database.restorePortableData(database);
-    for (final entry in settings.entries) {
-      await _restorePreference(entry.key, entry.value);
-    }
+    await restoreSettings(settings);
     return BackupSummary(
       history: (database['history'] as List?)?.length ?? 0,
       subscriptions: (database['subscriptions'] as List?)?.length ?? 0,
