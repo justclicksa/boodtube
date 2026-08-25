@@ -2,6 +2,7 @@
 // Widget tests for VideoCard
 // ============================================================
 
+import 'package:audio_service/audio_service.dart' show MediaControl;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +14,8 @@ import 'package:smarttube_poc/presentation/providers/settings_providers.dart';
 import 'package:smarttube_poc/domain/entities/media_item.dart';
 import 'package:smarttube_poc/domain/entities/media_format.dart';
 import 'package:smarttube_poc/presentation/widgets/video_card.dart';
+
+import '../../support/player_container.dart';
 
 MediaItem _createTestItem({
   String videoId = 'test123',
@@ -288,6 +291,99 @@ void main() {
       );
       expect(size.width, greaterThanOrEqualTo(48));
       expect(size.height, greaterThanOrEqualTo(48));
+    });
+
+    group('queue actions', () {
+      Future<PlayerTestHarness> pumpCardMenu(
+        WidgetTester tester,
+        MediaItem item,
+      ) async {
+        final harness = await playerTestHarness();
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: harness.container,
+            child: MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: Scaffold(
+                body: SizedBox(
+                  width: 360,
+                  height: 360,
+                  child: VideoCard(item: item),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.tap(find.byIcon(Icons.more_vert));
+        await tester.pumpAndSettle();
+        return harness;
+      }
+
+      testWidgets('the menu offers both queue actions', (tester) async {
+        await pumpCardMenu(tester, _createTestItem());
+
+        expect(find.text('Play next'), findsOneWidget);
+        expect(find.text('Add to queue'), findsOneWidget);
+      });
+
+      testWidgets('add to queue appends and confirms', (tester) async {
+        final harness = await pumpCardMenu(
+          tester,
+          _createTestItem(videoId: 'second'),
+        );
+        harness.controller.enqueue(_createTestItem(videoId: 'first'));
+
+        await tester.tap(find.text('Add to queue'));
+        await tester.pumpAndSettle();
+
+        expect(
+          harness.playerState.queue.map((q) => q.videoId),
+          ['first', 'second'],
+        );
+        expect(find.text('Added to queue'), findsOneWidget);
+      });
+
+      testWidgets('play next jumps the queue', (tester) async {
+        final harness = await pumpCardMenu(
+          tester,
+          _createTestItem(videoId: 'urgent'),
+        );
+        harness.controller.enqueue(_createTestItem(videoId: 'first'));
+
+        await tester.tap(find.text('Play next'));
+        await tester.pumpAndSettle();
+
+        expect(
+          harness.playerState.queue.map((q) => q.videoId),
+          ['urgent', 'first'],
+        );
+        expect(find.text('Added to queue'), findsOneWidget);
+      });
+
+      testWidgets('queueing a video gives the notification a next button',
+          (tester) async {
+        final harness = await pumpCardMenu(tester, _createTestItem());
+        expect(
+          harness.audioHandler.playbackState.value.controls,
+          isNot(contains(MediaControl.skipToNext)),
+        );
+
+        await tester.tap(find.text('Add to queue'));
+        await tester.pumpAndSettle();
+
+        expect(
+          harness.audioHandler.playbackState.value.controls,
+          contains(MediaControl.skipToNext),
+        );
+
+        harness.controller.clearQueue();
+        expect(
+          harness.audioHandler.playbackState.value.controls,
+          isNot(contains(MediaControl.skipToNext)),
+        );
+      });
     });
   });
 }

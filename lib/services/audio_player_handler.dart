@@ -15,6 +15,40 @@ import 'package:media_kit/media_kit.dart';
 
 import '../domain/entities/media_item.dart' as domain;
 
+/// The notification's button row, and which three of those buttons the
+/// Android collapsed/lock-screen view shows.
+///
+/// Pure, so the row can be checked without an audio service behind it —
+/// and because the indices have to be derived from the row rather than
+/// hardcoded. They used to be a fixed `[1, 2, 3]`, which pointed one
+/// past the end whenever there was no "next" button: Android drops the
+/// whole compact view when a compact index is out of range, so the
+/// collapsed notification lost its controls entirely.
+({List<MediaControl> controls, List<int> compactIndices}) notificationControls({
+  required bool playing,
+  required bool hasNext,
+  required bool hasPrevious,
+}) {
+  final controls = <MediaControl>[
+    if (hasPrevious) MediaControl.skipToPrevious,
+    MediaControl.rewind,
+    if (playing) MediaControl.pause else MediaControl.play,
+    MediaControl.fastForward,
+    if (hasNext) MediaControl.skipToNext,
+  ];
+  // Skip back / play-pause / skip forward when a queue provides them,
+  // otherwise the seek buttons take those two outer slots.
+  final playPause = hasPrevious ? 2 : 1;
+  return (
+    controls: controls,
+    compactIndices: [
+      if (hasPrevious) 0 else playPause - 1,
+      playPause,
+      if (hasNext) controls.length - 1 else playPause + 1,
+    ],
+  );
+}
+
 class SmartTubeAudioHandler extends BaseAudioHandler with SeekHandler {
   SmartTubeAudioHandler(this._player) {
     _player.stream.playing.listen((playing) => _publish(playing: playing));
@@ -65,24 +99,21 @@ class SmartTubeAudioHandler extends BaseAudioHandler with SeekHandler {
 
   void _publish({bool? playing}) {
     final isPlaying = playing ?? _player.state.playing;
+    final row = notificationControls(
+      playing: isPlaying,
+      hasNext: onSkipNext != null,
+      hasPrevious: onSkipPrevious != null,
+    );
     playbackState.add(
       playbackState.value.copyWith(
-        controls: [
-          if (onSkipPrevious != null) MediaControl.skipToPrevious,
-          MediaControl.rewind,
-          if (isPlaying) MediaControl.pause else MediaControl.play,
-          MediaControl.fastForward,
-          if (onSkipNext != null) MediaControl.skipToNext,
-        ],
+        controls: row.controls,
         systemActions: const {
           MediaAction.seek,
           MediaAction.seekForward,
           MediaAction.seekBackward,
           MediaAction.setSpeed,
         },
-        // Show play/pause (and skip when available) in the collapsed view.
-        androidCompactActionIndices:
-            onSkipPrevious != null ? const [0, 2, 4] : const [1, 2, 3],
+        androidCompactActionIndices: row.compactIndices,
         playing: isPlaying,
         updatePosition: _position,
         bufferedPosition: _buffered,
