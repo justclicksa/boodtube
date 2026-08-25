@@ -5,6 +5,7 @@
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 import '../../domain/entities/media_format.dart';
+import 'mpd_builder.dart';
 
 class ResolvedStream {
   final String videoUrl;
@@ -27,6 +28,14 @@ class ResolvedStream {
   /// the in-player quality picker without a second network round-trip.
   final List<int> availableHeights;
 
+  /// The selected video and audio formats described as DASH
+  /// representations, ready for [MpdBuilder]. Only the selected pair is
+  /// included: ffmpeg's DASH demuxer opens every representation it is
+  /// offered while reading the manifest header, so listing all of them
+  /// would cost a round-trip per rendition for no gain (it does not
+  /// switch bitrate on its own either).
+  final List<MpdRepresentation> dashRepresentations;
+
   const ResolvedStream({
     required this.videoUrl,
     this.audioUrl,
@@ -39,6 +48,7 @@ class ResolvedStream {
     this.audioTracks = const [],
     this.selectedAudioTrackId,
     this.availableHeights = const [],
+    this.dashRepresentations = const [],
   });
 }
 
@@ -124,6 +134,7 @@ class StreamResolver {
           audioTracks: resolved.audioTracks,
           selectedAudioTrackId: resolved.selectedAudioTrackId,
           availableHeights: resolved.availableHeights,
+          dashRepresentations: resolved.dashRepresentations,
         );
       } catch (e) {
         lastError = e;
@@ -242,6 +253,11 @@ class StreamResolver {
         selectedAudioTrackId:
             audioStream == null ? null : _audioTrackId(audioStream),
         availableHeights: heights,
+        dashRepresentations: [
+          MpdRepresentation.fromStreamInfo(videoStream),
+          if (audioStream != null)
+            MpdRepresentation.fromStreamInfo(audioStream),
+        ],
       );
     } catch (e) {
       throw Exception('Failed to resolve stream: $e');

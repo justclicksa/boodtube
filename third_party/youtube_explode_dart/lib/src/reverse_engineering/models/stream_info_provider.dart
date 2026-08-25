@@ -61,6 +61,17 @@ abstract class StreamInfoProvider {
   ///
   List<Fragment>? get fragments => null;
 
+  /// Byte range of the DASH initialization segment inside the stream
+  /// file, as `start-end`. Only the adaptive (DASH) formats carry it.
+  String? get initRange => null;
+
+  /// Byte range of the DASH `sidx` index inside the stream file, as
+  /// `start-end`. Only the adaptive (DASH) formats carry it.
+  String? get indexRange => null;
+
+  /// Samples per second of an audio format, when the source reports it.
+  int? get audioSamplingRate => null;
+
   ///
   AudioTrack? get audioTrack => null;
 

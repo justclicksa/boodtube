@@ -594,5 +594,7 @@
   "subtitleStyleCustom": "مخصص",
   "defaultSubtitleLanguage": "الترجمة الافتراضية",
   "defaultSubtitleLanguageSubtitle": "تفعيل الترجمة تلقائيًا بهذه اللغة",
-  "subtitleLanguageAppDefault": "لغة التطبيق"
+  "subtitleLanguageAppDefault": "لغة التطبيق",
+  "adaptiveStreaming": "البث التكيفي (DASH)",
+  "adaptiveStreamingSubtitle": "تجريبي: ترك المشغل يدمج الفيديو والصوت بنفسه"
 }

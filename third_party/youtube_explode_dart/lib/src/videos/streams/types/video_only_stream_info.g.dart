@@ -25,6 +25,8 @@ VideoOnlyStreamInfo _$VideoOnlyStreamInfoFromJson(Map<String, dynamic> json) =>
           .map((e) => Fragment.fromJson(e as Map<String, dynamic>))
           .toList(),
       mediaTypeFromJson(json['codec'] as String),
+      initRange: json['initRange'] as String?,
+      indexRange: json['indexRange'] as String?,
     );
 
 Map<String, dynamic> _$VideoOnlyStreamInfoToJson(
@@ -43,6 +45,8 @@ Map<String, dynamic> _$VideoOnlyStreamInfoToJson(
       'framerate': instance.framerate,
       'fragments': instance.fragments,
       'codec': mediaTypeToJson(instance.codec),
+      'initRange': instance.initRange,
+      'indexRange': instance.indexRange,
     };
 
 const _$VideoQualityEnumMap = {

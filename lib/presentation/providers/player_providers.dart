@@ -10,10 +10,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 
+import '../../data/youtube/mpd_builder.dart';
 import '../../data/youtube/stream_resolver.dart';
 import '../../data/local/preferences/settings_repository_impl.dart';
 import '../../core/errors/exceptions.dart';
 import '../../domain/entities/content_filter.dart';
+import '../../core/network/stream_proxy.dart';
 import '../../domain/entities/media_item.dart';
 import '../../domain/entities/media_subtitle.dart';
 import '../../domain/entities/sponsor_segment.dart';
@@ -928,10 +930,31 @@ class PlayerController extends StateNotifier<PlayerStateData>
       }
     }
 
+    // Opt-in DASH: describe the same two relayed URLs as a manifest and
+    // hand mpv that single URL, so ffmpeg muxes video and audio itself
+    // instead of the player carrying a separate audio track. The
+    // libmpv media_kit ships is built with --enable-libxml2 and
+    // --enable-demuxer=dash on both Android and iOS (see
+    // docs/DASH_FEASIBILITY.md), so the manifest is demuxed natively.
+    final mpdUrl = settings.adaptiveStreaming && localAudioUrl != null
+        ? _registerManifest(proxy, resolved, localVideoUrl, localAudioUrl)
+        : null;
+
     // Retire the routes of whatever was playing before: the previous
     // relay would otherwise keep downloading and compete for bandwidth
     // with the stream that replaced it.
-    proxy.retainOnly([localVideoUrl, if (localAudioUrl != null) localAudioUrl]);
+    proxy.retainOnly([
+      localVideoUrl,
+      if (localAudioUrl != null) localAudioUrl,
+      if (mpdUrl != null) mpdUrl,
+    ]);
+
+    if (mpdUrl != null) {
+      debugPrint('openStreams: opening DASH manifest');
+      await _player.open(Media(mpdUrl));
+      await _player.setRate(state.playbackSpeed);
+      return resolved;
+    }
 
     await _player.open(Media(localVideoUrl));
     // mpv resets audio-delay and the demuxer limits per file, so the
@@ -942,6 +965,53 @@ class PlayerController extends StateNotifier<PlayerStateData>
       await _player.setAudioTrack(AudioTrack.uri(localAudioUrl));
     }
     return resolved;
+  }
+
+  /// Builds the DASH manifest for [resolved] and serves it from the
+  /// proxy, or returns null when the formats cannot describe one.
+  ///
+  /// The manifest points at the loopback routes that were just
+  /// registered rather than at googlevideo: ffmpeg would otherwise fetch
+  /// the media itself over a TLS stack that cannot always reach the CDN.
+  String? _registerManifest(
+    StreamProxy proxy,
+    ResolvedStream resolved,
+    String localVideoUrl,
+    String localAudioUrl,
+  ) {
+    final routes = <String, String>{
+      resolved.videoUrl: localVideoUrl,
+      if (resolved.audioUrl != null) resolved.audioUrl!: localAudioUrl,
+    };
+    final representations = resolved.dashRepresentations
+        .where((rep) => routes.containsKey(rep.url.toString()))
+        .toList();
+    final builder = MpdBuilder(
+      duration: _manifestDuration(representations),
+      representations: representations,
+    );
+    if (builder.isEmpty) {
+      debugPrint('openStreams: no DASH manifest for these formats');
+      return null;
+    }
+    return proxy.registerText(
+      builder.build(rewrite: (url) => routes[url.toString()] ?? url.toString()),
+    );
+  }
+
+  /// A static MPD is invalid without a total duration, and the stream
+  /// manifest does not carry one. Prefer the metadata duration; fall
+  /// back to size over bitrate, which is close enough to seek by.
+  Duration _manifestDuration(List<MpdRepresentation> representations) {
+    final known = state.currentItem?.duration ?? Duration.zero;
+    if (known > Duration.zero) return known;
+    for (final rep in representations) {
+      final size = rep.contentLength ?? 0;
+      if (size > 0 && rep.bandwidth > 0) {
+        return Duration(milliseconds: size * 8 * 1000 ~/ rep.bandwidth);
+      }
+    }
+    return Duration.zero;
   }
 
   /// Refreshes expired URLs and progressively lowers quality without

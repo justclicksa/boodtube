@@ -1339,4 +1339,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get subtitleLanguageAppDefault => 'لغة التطبيق';
+
+  @override
+  String get adaptiveStreaming => 'البث التكيفي (DASH)';
+
+  @override
+  String get adaptiveStreamingSubtitle =>
+      'تجريبي: ترك المشغل يدمج الفيديو والصوت بنفسه';
 }

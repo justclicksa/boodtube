@@ -39,6 +39,15 @@ mixin StreamInfo {
   /// Stream quality label.
   String get qualityLabel;
 
+  /// Byte range of the DASH initialization segment inside this stream's
+  /// file, as `start-end`, or null when the source does not expose one.
+  /// Needed to describe the stream as a DASH `SegmentBase`.
+  String? get initRange => null;
+
+  /// Byte range of the DASH `sidx` index inside this stream's file, as
+  /// `start-end`, or null when the source does not expose one.
+  String? get indexRange => null;
+
   /// Convert to a json-serialized type.
   Map<String, dynamic> toJson();
 }

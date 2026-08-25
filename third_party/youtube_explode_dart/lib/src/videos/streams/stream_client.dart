@@ -450,22 +450,28 @@ class StreamClient {
           framerate,
           stream.fragments ?? const [],
           stream.codec,
+          initRange: stream.initRange,
+          indexRange: stream.indexRange,
         );
         continue;
         // Audio-only
       } else if (!audioCodec.isNullOrWhiteSpace) {
         yield AudioOnlyStreamInfo(
-            videoId ?? watchPage!.videoId,
-            itag,
-            url,
-            container,
-            fileSize,
-            bitrate,
-            audioCodec!,
-            stream.qualityLabel!,
-            stream.fragments ?? const [],
-            stream.codec,
-            stream.audioTrack);
+          videoId ?? watchPage!.videoId,
+          itag,
+          url,
+          container,
+          fileSize,
+          bitrate,
+          audioCodec!,
+          stream.qualityLabel!,
+          stream.fragments ?? const [],
+          stream.codec,
+          stream.audioTrack,
+          initRange: stream.initRange,
+          indexRange: stream.indexRange,
+          audioSamplingRate: stream.audioSamplingRate,
+        );
       } else {
         throw YoutubeExplodeException('Could not extract stream codec');
       }

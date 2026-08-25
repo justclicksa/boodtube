@@ -7,4 +7,7 @@ mixin AudioStreamInfo on StreamInfo {
 
   /// Audio track which describes the language of the audio.
   AudioTrack? get audioTrack;
+
+  /// Samples per second, when the source reports it.
+  int? get audioSamplingRate => null;
 }

@@ -17,6 +17,7 @@
 // ============================================================
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -25,6 +26,14 @@ import 'package:flutter/foundation.dart';
 class _UpstreamInfo {
   const _UpstreamInfo({required this.total, required this.contentType});
   final int total;
+  final String contentType;
+}
+
+/// A small in-memory document (a generated DASH manifest) served whole,
+/// as opposed to a route that relays a remote file by range.
+class _TextResource {
+  const _TextResource(this.bytes, this.contentType);
+  final Uint8List bytes;
   final String contentType;
 }
 
@@ -64,6 +73,8 @@ class StreamProxy {
     ..idleTimeout = const Duration(seconds: 30);
 
   final Map<String, Uri> _routes = {};
+
+  final Map<String, _TextResource> _texts = {};
 
   /// Total size + content type per upstream URL. Constant for the life of
   /// a URL, so learning it once saves a round-trip on every seek.
@@ -110,6 +121,26 @@ class StreamProxy {
     return 'http://127.0.0.1:${server.port}/$id';
   }
 
+  /// Register an in-memory document and get a local http://127.0.0.1 URL
+  /// serving it. Used for the client-built DASH manifest, which has no
+  /// upstream to relay: the bytes are already here.
+  /// Must be called after [start].
+  String registerText(
+    String body, {
+    String contentType = 'application/dash+xml',
+  }) {
+    final server = _server;
+    if (server == null) {
+      throw StateError('StreamProxy.registerText called before start()');
+    }
+    final id = 't${_nextId++}';
+    _texts[id] = _TextResource(
+      Uint8List.fromList(utf8.encode(body)),
+      contentType,
+    );
+    return 'http://127.0.0.1:${server.port}/$id';
+  }
+
   /// Drops routes registered before [keep], so a quality switch does not
   /// leave the previous relay competing for bandwidth.
   void retainOnly(Iterable<String> keep) {
@@ -118,10 +149,26 @@ class StreamProxy {
         .whereType<String>()
         .toSet();
     _routes.removeWhere((id, _) => !ids.contains(id));
+    _texts.removeWhere((id, _) => !ids.contains(id));
   }
 
   Future<void> _handleRequest(HttpRequest request) async {
     final id = request.uri.path.replaceFirst('/', '');
+
+    final text = _texts[id];
+    if (text != null) {
+      final res = request.response;
+      res.headers
+        ..set(HttpHeaders.contentTypeHeader, text.contentType)
+        ..set(HttpHeaders.acceptRangesHeader, 'none');
+      res
+        ..statusCode = HttpStatus.ok
+        ..contentLength = text.bytes.length
+        ..add(text.bytes);
+      await res.close();
+      return;
+    }
+
     final target = _routes[id];
     if (target == null) {
       request.response.statusCode = HttpStatus.notFound;
@@ -418,6 +465,7 @@ class StreamProxy {
     await _server?.close(force: true);
     _server = null;
     _routes.clear();
+    _texts.clear();
     _infoCache.clear();
     _client.close(force: true);
   }

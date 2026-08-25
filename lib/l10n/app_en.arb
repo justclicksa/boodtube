@@ -622,5 +622,7 @@
   "subtitleStyleCustom": "Custom",
   "defaultSubtitleLanguage": "Default subtitles",
   "defaultSubtitleLanguageSubtitle": "Turn captions on automatically in this language",
-  "subtitleLanguageAppDefault": "App language"
+  "subtitleLanguageAppDefault": "App language",
+  "adaptiveStreaming": "Adaptive streaming (DASH)",
+  "adaptiveStreamingSubtitle": "Experimental: let the player combine video and audio itself"
 }

@@ -264,6 +264,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           _SettingsRow(
+            keywords: [
+              l10n.adaptiveStreaming,
+              l10n.adaptiveStreamingSubtitle,
+            ],
+            widget: SwitchListTile(
+              secondary: const Icon(Icons.multiple_stop),
+              title: Text(l10n.adaptiveStreaming),
+              subtitle: Text(l10n.adaptiveStreamingSubtitle),
+              value: settings.adaptiveStreaming,
+              onChanged: controller.setAdaptiveStreaming,
+            ),
+          ),
+          _SettingsRow(
             keywords: [l10n.doubleTapToSeek, l10n.doubleTapToSeekSubtitle],
             widget: SwitchListTile(
               secondary: const Icon(Icons.touch_app),

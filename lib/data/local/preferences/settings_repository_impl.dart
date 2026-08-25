@@ -208,6 +208,10 @@ class AppSettings {
   /// Keep the voice pitch when the playback speed is not 1x. Off is
   /// SmartTube's "pitch effect", where pitch rides the speed.
   final bool keepPitch;
+  /// Hand the player a client-built DASH manifest instead of two
+  /// separate progressive URLs, so ffmpeg muxes video and audio itself.
+  /// Off by default: the progressive path is the proven one.
+  final bool adaptiveStreaming;
 
   /// Ordered shortcuts shown in the player's top bar. The settings gear
   /// is always retained as an escape hatch even if an old backup omits it.
@@ -252,6 +256,7 @@ class AppSettings {
     this.autoQuality = true,
     this.bufferPreset = BufferPreset.medium,
     this.keepPitch = true,
+    this.adaptiveStreaming = false,
     this.playerQuickActions = const [
       PlayerQuickAction.cast,
       PlayerQuickAction.pictureInPicture,
@@ -283,6 +288,7 @@ class AppSettings {
     bool? autoQuality,
     BufferPreset? bufferPreset,
     bool? keepPitch,
+    bool? adaptiveStreaming,
     List<PlayerQuickAction>? playerQuickActions,
     String? subtitleStyle,
     String? preferredSubtitleLanguage,
@@ -309,6 +315,7 @@ class AppSettings {
       autoQuality: autoQuality ?? this.autoQuality,
       bufferPreset: bufferPreset ?? this.bufferPreset,
       keepPitch: keepPitch ?? this.keepPitch,
+      adaptiveStreaming: adaptiveStreaming ?? this.adaptiveStreaming,
       playerQuickActions: playerQuickActions ?? this.playerQuickActions,
       subtitleStyle: subtitleStyle ?? this.subtitleStyle,
       preferredSubtitleLanguage:
@@ -341,6 +348,7 @@ class SettingsRepository {
   static const _keyAutoplayNext = 'settings.autoplay_next';
   static const _keySkipShortsInAutoplay = 'settings.skip_shorts_autoplay';
   static const _keyAutoQuality = 'settings.auto_quality';
+  static const _keyAdaptiveStreaming = 'settings.adaptive_streaming';
   static const _keyPlayerQuickActions = 'settings.player_quick_actions';
   static const _keyBufferPreset = 'settings.buffer_preset';
   static const _keyKeepPitch = 'settings.keep_pitch';
@@ -378,6 +386,7 @@ class SettingsRepository {
       skipShortsInAutoplay:
           _prefs.getBool(_keySkipShortsInAutoplay) ?? true,
       autoQuality: _prefs.getBool(_keyAutoQuality) ?? true,
+      adaptiveStreaming: _prefs.getBool(_keyAdaptiveStreaming) ?? false,
       playerQuickActions: _readPlayerQuickActions(),
       bufferPreset: _readBufferPreset(),
       keepPitch: _prefs.getBool(_keyKeepPitch) ?? true,
@@ -429,6 +438,10 @@ class SettingsRepository {
 
   Future<void> setKeepPitch(bool keepPitch) async {
     await _prefs.setBool(_keyKeepPitch, keepPitch);
+  }
+
+  Future<void> setAdaptiveStreaming(bool enabled) async {
+    await _prefs.setBool(_keyAdaptiveStreaming, enabled);
   }
 
   Future<void> setSponsorBlockEnabled(bool enabled) async {

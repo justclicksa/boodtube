@@ -46,18 +46,31 @@ class AudioOnlyStreamInfo with StreamInfo, AudioStreamInfo {
   @override
   final AudioTrack? audioTrack;
 
+  @override
+  final String? initRange;
+
+  @override
+  final String? indexRange;
+
+  @override
+  final int? audioSamplingRate;
+
   AudioOnlyStreamInfo(
-      this.videoId,
-      this.tag,
-      this.url,
-      this.container,
-      this.size,
-      this.bitrate,
-      this.audioCodec,
-      this.qualityLabel,
-      this.fragments,
-      this.codec,
-      this.audioTrack);
+    this.videoId,
+    this.tag,
+    this.url,
+    this.container,
+    this.size,
+    this.bitrate,
+    this.audioCodec,
+    this.qualityLabel,
+    this.fragments,
+    this.codec,
+    this.audioTrack, {
+    this.initRange,
+    this.indexRange,
+    this.audioSamplingRate,
+  });
 
   @override
   String toString() =>

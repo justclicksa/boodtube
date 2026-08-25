@@ -2437,6 +2437,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'App language'**
   String get subtitleLanguageAppDefault;
+
+  /// No description provided for @adaptiveStreaming.
+  ///
+  /// In en, this message translates to:
+  /// **'Adaptive streaming (DASH)'**
+  String get adaptiveStreaming;
+
+  /// No description provided for @adaptiveStreamingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Experimental: let the player combine video and audio itself'**
+  String get adaptiveStreamingSubtitle;
 }
 
 class _AppLocalizationsDelegate

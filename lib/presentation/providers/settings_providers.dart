@@ -101,6 +101,11 @@ class SettingsController extends StateNotifier<AppSettings> {
     await _repo.setKeepPitch(keepPitch);
   }
 
+  Future<void> setAdaptiveStreaming(bool enabled) async {
+    state = state.copyWith(adaptiveStreaming: enabled);
+    await _repo.setAdaptiveStreaming(enabled);
+  }
+
   Future<void> setDoubleTapToSeek(bool enabled) async {
     state = state.copyWith(doubleTapToSeek: enabled);
     await _repo.setDoubleTapToSeek(enabled);
