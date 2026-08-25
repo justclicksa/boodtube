@@ -1,0 +1,179 @@
+// ============================================================
+// SmartTube native playback modules, wired into the Flutter build
+// ============================================================
+// The Flutter app and the SmartTube TV app should decode video with the
+// same engine, so the forked ExoPlayer (with the SABR module and
+// DashManifestParser2) and MediaServiceCore's stream resolution are
+// consumed straight from the parent checkout rather than vendored or
+// re-implemented. `include` + an explicit `projectDir` is enough to make
+// them ordinary subprojects of this build.
+//
+// The catch is that those modules were written for AGP 7.4.2 / Gradle 7.5
+// while this build runs AGP 8.11.1, and AGP 8 turned two things that AGP
+// 7 accepted into hard errors. Both are fixed from the outside here, so
+// nothing in the parent repo (two of the three roots are git submodules)
+// has to be edited:
+//
+//  1. `namespace` is mandatory and none of these modules declare one, so
+//     it is injected the moment the Android plugin is applied — before
+//     AGP finalises the DSL and looks for it.
+//  2. `package=` in the source AndroidManifest is rejected. Rather than
+//     rewriting manifests inside the submodules, a stripped copy is
+//     generated into this build's directory and the module's `main`
+//     source set is pointed at it. The package it carried becomes the
+//     injected namespace, so the generated R class keeps its old name.
+//
+// This file is Groovy rather than Kotlin on purpose: it configures the
+// `android` extension, and AGP's types are not on a settings script's
+// compile classpath, so the Kotlin version cannot name them.
+//
+// The version constants these build scripts read (`minSdkVersion`,
+// `compileSdkVersion`, `annotationXVersion`, …) normally come from the
+// SmartTube root build applying SharedModules/constants.gradle. This
+// build has its own root, so the same file is applied to each imported
+// project individually.
+
+def smartTubeRoot = settingsDir.parentFile.parentFile
+def sharedModulesRoot = new File(smartTubeRoot, 'SharedModules')
+def mediaServiceCoreRoot = new File(smartTubeRoot, 'MediaServiceCore')
+def exoPlayerRoot = new File(smartTubeRoot, 'exoplayer-amzn-2.10.6')
+
+// Two of these are git submodules. An empty directory produces a wall of
+// unrelated "project not found" errors, so say what actually went wrong.
+assert new File(sharedModulesRoot, 'sharedutils').isDirectory():
+        "SharedModules submodule is not populated at ${sharedModulesRoot} — " +
+        "run `git submodule update --init --recursive` in ${smartTubeRoot}"
+assert new File(mediaServiceCoreRoot, 'youtubeapi').isDirectory():
+        "MediaServiceCore submodule is not populated at ${mediaServiceCoreRoot} — " +
+        "run `git submodule update --init --recursive` in ${smartTubeRoot}"
+assert new File(exoPlayerRoot, 'library/sabr').isDirectory():
+        "Forked ExoPlayer (with the SABR module) not found at ${exoPlayerRoot}"
+
+// The ExoPlayer build scripts prefix their own inter-module project
+// references with this, exactly as the SmartTube root settings does.
+gradle.ext.exoplayerModulePrefix = 'exoplayer-'
+
+// Only the playback core is imported. Leanback, the TV UI, the test
+// utils and the extensions SmartTube uses elsewhere are deliberately
+// left out: this app brings its own UI, and every extra module is
+// configuration time plus another AGP-8 incompatibility to absorb.
+def smartTubeModules = [
+        ':sharedutils'                        : new File(sharedModulesRoot, 'sharedutils'),
+        ':sharedtests'                        : new File(sharedModulesRoot, 'sharedtests'),
+        ':commons-io-2.8.0'                   : new File(sharedModulesRoot, 'commons-io-2.8.0'),
+        ':j2v8'                               : new File(sharedModulesRoot, 'j2v8'),
+        ':mediaserviceinterfaces'             : new File(mediaServiceCoreRoot, 'mediaserviceinterfaces'),
+        ':youtubeapi'                         : new File(mediaServiceCoreRoot, 'youtubeapi'),
+        ':exoplayer-library-core'             : new File(exoPlayerRoot, 'library/core'),
+        ':exoplayer-library-dash'             : new File(exoPlayerRoot, 'library/dash'),
+        ':exoplayer-library-hls'              : new File(exoPlayerRoot, 'library/hls'),
+        ':exoplayer-library-smoothstreaming'  : new File(exoPlayerRoot, 'library/smoothstreaming'),
+        ':exoplayer-library-sabr'             : new File(exoPlayerRoot, 'library/sabr'),
+        // Not used by the app, but the library modules above name them in
+        // their `testImplementation` blocks, and Gradle resolves a project
+        // reference at configuration time whether or not the configuration
+        // is ever built.
+        ':exoplayer-testutils'                : new File(exoPlayerRoot, 'testutils'),
+        ':exoplayer-testutils-robolectric'    : new File(exoPlayerRoot, 'testutils_robolectric'),
+]
+
+smartTubeModules.each { path, dir ->
+    include path
+    project(path).projectDir = dir
+}
+
+def importedPaths = smartTubeModules.keySet()
+def constantsFile = new File(sharedModulesRoot, 'constants.gradle')
+// Alongside the rest of this build's output rather than under android/, which
+// is not a generated directory and is not ignored by git.
+def strippedManifestRoot = new File(settingsDir.parentFile, 'build/smarttube-manifests')
+
+gradle.beforeProject { project ->
+    if (!importedPaths.contains(project.path)) {
+        return
+    }
+
+    // Version constants (minSdkVersion, compileSdkVersion, the androidx
+    // version pins, …). Applied per project because this build's root is
+    // the Flutter one, which knows nothing about them.
+    project.apply from: constantsFile
+
+    // The SmartTube root build pins a handful of dependency versions for
+    // every one of its projects, and the imported sources are written
+    // against those APIs — `sharedutils` calls `HttpUrl.parse`, which okhttp
+    // 4 marks deprecated at ERROR level, so without the pin the module does
+    // not even compile. Only the imported projects are pinned; :app and the
+    // Flutter plugins keep whatever they resolve on their own.
+    //
+    // Deliberately NOT pinned: the Kotlin stdlib. SmartTube forces 1.8.10 to
+    // match its own Kotlin plugin, but here the sources are compiled by this
+    // build's Kotlin 2.x, which needs the matching 2.x stdlib.
+    project.configurations.all {
+        resolutionStrategy.force 'com.squareup.okhttp3:okhttp:' + project.ext.okhttpVersion
+        resolutionStrategy.force 'org.chromium.net:cronet-api:' + project.ext.cronetApiVersion
+        resolutionStrategy.force 'androidx.multidex:multidex:' + project.ext.multiDexVersion
+        // youtubeapi asks for kotlinx-coroutines at `kotlinVersion` rather
+        // than `kotlinxVersion` — there is no coroutines 1.8.10, so the
+        // module cannot resolve without this. SmartTube's root build carries
+        // the same correction.
+        resolutionStrategy.force 'org.jetbrains.kotlinx:kotlinx-coroutines-android:' + project.ext.kotlinxVersion
+        // SmartTube swaps these for its own modified copies, which are part
+        // of the TV UI and are not imported here.
+        exclude group: 'androidx.leanback', module: 'leanback'
+    }
+
+    def sourceManifest = new File(project.projectDir, 'src/main/AndroidManifest.xml')
+    def declaredPackage = null
+    if (sourceManifest.isFile()) {
+        def matcher = sourceManifest.text =~ /package\s*=\s*"([^"]+)"/
+        if (matcher) {
+            declaredPackage = matcher[0][1]
+        }
+    }
+
+    project.plugins.withId('com.android.library') {
+        if (declaredPackage == null) {
+            return
+        }
+        // The package the module already declared is the right namespace:
+        // it is what its R class and BuildConfig were generated under
+        // before AGP 8 split the two concepts apart.
+        project.android.namespace = declaredPackage
+
+        def strippedDir = new File(strippedManifestRoot, project.name)
+        strippedDir.mkdirs()
+        def target = new File(strippedDir, 'AndroidManifest.xml')
+        def rewritten = sourceManifest.text.replaceAll(/\s*package\s*=\s*"[^"]+"/, '')
+        // Only rewrite when it actually changed, so up-to-date checks are
+        // not invalidated on every configuration.
+        if (!target.isFile() || target.text != rewritten) {
+            target.text = rewritten
+        }
+        project.android.sourceSets.main.manifest.srcFile target
+    }
+
+    // These modules declare Java 8 and say nothing about Kotlin, which was
+    // fine under the Kotlin 1.8 the SmartTube build pins. This build's
+    // Kotlin plugin is 2.x, whose jvmTarget follows the JDK (17), and the
+    // Android plugin refuses a module whose Java and Kotlin tasks disagree
+    // ("Inconsistent JVM-target compatibility"). Raising Java to 17 rather
+    // than pushing Kotlin down to 8 keeps every module in this build on one
+    // target, and costs nothing: the sources only use Java 8 features, so
+    // D8 desugars the result exactly as before.
+    // afterEvaluate, not plugins.withId: the module's own build script sets
+    // Java 8 while it is being evaluated, so anything applied earlier is
+    // simply overwritten. This callback is registered before the Android
+    // plugin registers its own, so it still runs before AGP reads the value.
+    project.afterEvaluate {
+        if (project.extensions.findByName('android') != null) {
+            project.android.compileOptions {
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
+            }
+            // AGP 8 stopped generating BuildConfig unless it is asked for.
+            // These modules read BuildConfig.DEBUG (sharedutils gates its
+            // okhttp logging on it), so it has to be turned back on.
+            project.android.buildFeatures.buildConfig = true
+        }
+    }
+}

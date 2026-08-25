@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.util.Rational
 import com.ryanheise.audioservice.AudioServiceActivity
+import com.smarttube.smarttube_poc.player.SmartTubePlayerPlugin
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
@@ -15,8 +16,19 @@ class MainActivity : AudioServiceActivity() {
 
     private var channel: MethodChannel? = null
 
+    // The native playback engine (forked ExoPlayer + MediaServiceCore). It is
+    // registered by hand rather than as a pubspec plugin because it lives in
+    // this app module, next to the SmartTube modules it links against.
+    private var playerPlugin: SmartTubePlayerPlugin? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        playerPlugin = SmartTubePlayerPlugin(
+            applicationContext,
+            flutterEngine.dartExecutor.binaryMessenger,
+            flutterEngine.renderer,
+        )
 
         channel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -66,6 +78,14 @@ class MainActivity : AudioServiceActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         channel?.invokeMethod("onPiPModeChanged", isInPictureInPictureMode)
+    }
+
+    override fun onDestroy() {
+        // Releases the MediaCodec session with the activity; leaving it open
+        // keeps a decoder reserved for a player nothing can reach any more.
+        playerPlugin?.destroy()
+        playerPlugin = null
+        super.onDestroy()
     }
 
     override fun onUserLeaveHint() {
