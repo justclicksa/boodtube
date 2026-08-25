@@ -34,6 +34,9 @@ class ChannelPlaybackPreferences {
     this.subtitleOffset,
     this.subtitleBackgroundOpacity,
     this.videoFit,
+    this.videoAspect,
+    this.zoomPercent,
+    this.subtitlesDisabled = false,
   });
 
   final double? speed;
@@ -45,6 +48,21 @@ class ChannelPlaybackPreferences {
   final double? subtitleBackgroundOpacity;
   final String? videoFit;
 
+  /// Name of a `VideoAspect` value — the forced display ratio.
+  final String? videoAspect;
+
+  /// 100–300. Rotation and flip are deliberately absent: those are a
+  /// one-off fix for a single sideways upload, not a channel habit.
+  final double? zoomPercent;
+
+  /// The viewer switched captions off for this channel on purpose.
+  ///
+  /// Distinct from a null [subtitleCode], which only means "never
+  /// chose one" — without the distinction the default-subtitle-language
+  /// setting would switch captions straight back on for a channel the
+  /// viewer had just silenced.
+  final bool subtitlesDisabled;
+
   ChannelPlaybackPreferences copyWith({
     double? speed,
     int? qualityHeight,
@@ -54,6 +72,8 @@ class ChannelPlaybackPreferences {
     double? subtitleOffset,
     double? subtitleBackgroundOpacity,
     String? videoFit,
+    String? videoAspect,
+    double? zoomPercent,
     bool clearSubtitle = false,
     bool clearQualityHeight = false,
   }) =>
@@ -69,6 +89,11 @@ class ChannelPlaybackPreferences {
         subtitleBackgroundOpacity:
             subtitleBackgroundOpacity ?? this.subtitleBackgroundOpacity,
         videoFit: videoFit ?? this.videoFit,
+        videoAspect: videoAspect ?? this.videoAspect,
+        zoomPercent: zoomPercent ?? this.zoomPercent,
+        subtitlesDisabled: clearSubtitle
+            ? true
+            : (subtitleCode != null ? false : subtitlesDisabled),
       );
 
   Map<String, Object?> toJson() => {
@@ -81,6 +106,9 @@ class ChannelPlaybackPreferences {
         if (subtitleBackgroundOpacity != null)
           'subtitleBackgroundOpacity': subtitleBackgroundOpacity,
         if (videoFit != null) 'videoFit': videoFit,
+        if (videoAspect != null) 'videoAspect': videoAspect,
+        if (zoomPercent != null) 'zoomPercent': zoomPercent,
+        if (subtitlesDisabled) 'subtitlesDisabled': true,
       };
 
   factory ChannelPlaybackPreferences.fromJson(Map<String, Object?> json) =>
@@ -94,6 +122,9 @@ class ChannelPlaybackPreferences {
         subtitleBackgroundOpacity:
             (json['subtitleBackgroundOpacity'] as num?)?.toDouble(),
         videoFit: json['videoFit'] as String?,
+        videoAspect: json['videoAspect'] as String?,
+        zoomPercent: (json['zoomPercent'] as num?)?.toDouble(),
+        subtitlesDisabled: json['subtitlesDisabled'] as bool? ?? false,
       );
 }
 
@@ -136,6 +167,15 @@ class AppSettings {
   /// is always retained as an escape hatch even if an old backup omits it.
   final List<PlayerQuickAction> playerQuickActions;
 
+  /// Name of a `SubtitleStyle` preset. Stored as a string so the data
+  /// layer keeps no dependency on the presentation enum, the same way
+  /// [ChannelPlaybackPreferences.videoFit] is.
+  final String subtitleStyle;
+
+  /// Language captions are switched on in when a video has no remembered
+  /// choice — `'app'` follows the app language, `'off'` never picks one.
+  final String preferredSubtitleLanguage;
+
   const AppSettings({
     this.themeMode = AppThemeMode.dark,
     this.defaultQuality = MediaFormatQuality.highest,
@@ -167,6 +207,8 @@ class AppSettings {
       PlayerQuickAction.subtitles,
       PlayerQuickAction.settings,
     ],
+    this.subtitleStyle = 'defaultStyle',
+    this.preferredSubtitleLanguage = 'app',
   });
 
   AppSettings copyWith({
@@ -189,6 +231,8 @@ class AppSettings {
     bool? autoplayNext,
     bool? autoQuality,
     List<PlayerQuickAction>? playerQuickActions,
+    String? subtitleStyle,
+    String? preferredSubtitleLanguage,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -211,6 +255,9 @@ class AppSettings {
       autoplayNext: autoplayNext ?? this.autoplayNext,
       autoQuality: autoQuality ?? this.autoQuality,
       playerQuickActions: playerQuickActions ?? this.playerQuickActions,
+      subtitleStyle: subtitleStyle ?? this.subtitleStyle,
+      preferredSubtitleLanguage:
+          preferredSubtitleLanguage ?? this.preferredSubtitleLanguage,
     );
   }
 }
@@ -239,6 +286,9 @@ class SettingsRepository {
   static const _keyAutoQuality = 'settings.auto_quality';
   static const _keyPlayerQuickActions = 'settings.player_quick_actions';
   static const _keyChannelPlayback = 'settings.channel_playback';
+  static const _keySubtitleStyle = 'settings.subtitle_style';
+  static const _keyPreferredSubtitleLanguage =
+      'settings.preferred_subtitle_language';
 
   final SharedPreferences _prefs;
 
@@ -269,7 +319,18 @@ class SettingsRepository {
       autoplayNext: _prefs.getBool(_keyAutoplayNext) ?? true,
       autoQuality: _prefs.getBool(_keyAutoQuality) ?? true,
       playerQuickActions: _readPlayerQuickActions(),
+      subtitleStyle: _prefs.getString(_keySubtitleStyle) ?? 'defaultStyle',
+      preferredSubtitleLanguage:
+          _prefs.getString(_keyPreferredSubtitleLanguage) ?? 'app',
     );
+  }
+
+  Future<void> setSubtitleStyle(String styleName) async {
+    await _prefs.setString(_keySubtitleStyle, styleName);
+  }
+
+  Future<void> setPreferredSubtitleLanguage(String language) async {
+    await _prefs.setString(_keyPreferredSubtitleLanguage, language);
   }
 
   Future<void> setThemeMode(AppThemeMode mode) async {

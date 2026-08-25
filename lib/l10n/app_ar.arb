@@ -517,5 +517,22 @@
   "autoplayNextSubtitle": "المتابعة بالمقطع المقترح التالي",
   "autoQuality": "جودة تلقائية",
   "autoQualitySubtitle": "اختيار الدقة حسب سرعة الاتصال",
-  "autoQualityLabel": "تلقائي"
+  "autoQualityLabel": "تلقائي",
+  "degreesValue": "{degrees}°",
+  "videoAspect": "نسبة العرض إلى الارتفاع",
+  "videoAspectAuto": "تلقائي",
+  "videoRotate": "تدوير",
+  "videoFlipHorizontal": "قلب أفقي",
+  "videoZoomPercent": "تكبير",
+  "subtitleStyle": "نمط الترجمة",
+  "subtitleStylePreview": "معاينة الترجمة",
+  "subtitleStyleDefault": "افتراضي",
+  "subtitleStyleWhite": "أبيض",
+  "subtitleStyleWhiteOnBlack": "أبيض على أسود",
+  "subtitleStyleYellow": "أصفر",
+  "subtitleStyleYellowOnBlack": "أصفر على أسود",
+  "subtitleStyleCustom": "مخصص",
+  "defaultSubtitleLanguage": "الترجمة الافتراضية",
+  "defaultSubtitleLanguageSubtitle": "تفعيل الترجمة تلقائيًا بهذه اللغة",
+  "subtitleLanguageAppDefault": "لغة التطبيق"
 }

@@ -18,6 +18,8 @@ import '../../domain/entities/sponsor_segment.dart';
 import '../../domain/repositories/local_library_repository.dart';
 import '../../services/audio_player_handler.dart';
 import '../../services/history_sync.dart';
+import '../screens/player/subtitle_styles.dart';
+import '../screens/player/video_transform.dart';
 import 'auth_providers.dart';
 import 'content_providers.dart' show cachedMediaItem, relatedVideosProvider;
 import 'repository_providers.dart';
@@ -138,6 +140,10 @@ class PlayerStateData {
     this.subtitleScale = 1,
     this.subtitleOffset = 24,
     this.subtitleBackgroundOpacity = 0.67,
+    this.videoAspect = VideoAspect.auto,
+    this.rotationDegrees = 0,
+    this.flipHorizontal = false,
+    this.zoomPercent = 100,
   });
 
   final MediaItem? currentItem;
@@ -185,6 +191,22 @@ class PlayerStateData {
   final double subtitleOffset;
   final double subtitleBackgroundOpacity;
 
+  /// Forced display ratio - SmartTube's "Video aspect". Remembered per
+  /// channel alongside [videoFit].
+  final VideoAspect videoAspect;
+
+  /// 0/90/180/270. Deliberately not persisted: a sideways upload is a
+  /// property of one video, not of the channel that posted it, so the
+  /// angle resets on every load.
+  final int rotationDegrees;
+
+  /// Mirror the picture left-to-right. Session-only, like
+  /// [rotationDegrees].
+  final bool flipHorizontal;
+
+  /// 100-300. SmartTube's "zoom percents", on top of [videoFit].
+  final double zoomPercent;
+
   PlayerStateData copyWith({
     MediaItem? currentItem,
     bool? isPlaying,
@@ -222,6 +244,10 @@ class PlayerStateData {
     double? subtitleScale,
     double? subtitleOffset,
     double? subtitleBackgroundOpacity,
+    VideoAspect? videoAspect,
+    int? rotationDegrees,
+    bool? flipHorizontal,
+    double? zoomPercent,
     bool clearError = false,
     bool clearItem = false,
     bool clearSleepTimer = false,
@@ -280,6 +306,10 @@ class PlayerStateData {
       subtitleOffset: subtitleOffset ?? this.subtitleOffset,
       subtitleBackgroundOpacity:
           subtitleBackgroundOpacity ?? this.subtitleBackgroundOpacity,
+      videoAspect: videoAspect ?? this.videoAspect,
+      rotationDegrees: rotationDegrees ?? this.rotationDegrees,
+      flipHorizontal: flipHorizontal ?? this.flipHorizontal,
+      zoomPercent: zoomPercent ?? this.zoomPercent,
     );
   }
 }
@@ -517,6 +547,13 @@ class PlayerController extends StateNotifier<PlayerStateData>
         subtitleOffset: channelPreferences?.subtitleOffset ?? 24,
         subtitleBackgroundOpacity:
             channelPreferences?.subtitleBackgroundOpacity ?? 0.67,
+        videoAspect: videoAspectFromName(channelPreferences?.videoAspect),
+        zoomPercent:
+            normalizeZoomPercent(channelPreferences?.zoomPercent ?? 100),
+        // Rotation and flip are per-video, so a previous fix for a
+        // sideways clip does not follow the viewer into the next one.
+        rotationDegrees: 0,
+        flipHorizontal: false,
       );
 
       // A live broadcast is a rolling HLS playlist, not a file that can
@@ -570,6 +607,19 @@ class PlayerController extends StateNotifier<PlayerStateData>
             .where((candidate) => candidate.code == subtitleCode)
             .firstOrNull;
         if (subtitle != null) await selectSubtitle(subtitle);
+      } else if (channelPreferences?.subtitlesDisabled != true) {
+        // Nothing remembered for this channel, and captions were not
+        // deliberately switched off for it: fall back to the viewer's
+        // default caption language. Not remembered afterwards - that
+        // would turn a global default into a per-channel decision the
+        // viewer never made.
+        final preferred = pickPreferredSubtitle(
+          item.subtitles,
+          _preferredSubtitleLanguage(),
+        );
+        if (preferred != null) {
+          await selectSubtitle(preferred, remember: false);
+        }
       }
 
       // Publish metadata so the notification / lock screen shows the
@@ -919,6 +969,29 @@ class PlayerController extends StateNotifier<PlayerStateData>
     unawaited(_rememberChannel(videoFit: fit.name));
   }
 
+  /// Forces a display aspect ratio - SmartTube's "Video aspect".
+  void setVideoAspect(VideoAspect aspect) {
+    state = state.copyWith(videoAspect: aspect);
+    unawaited(_rememberChannel(videoAspect: aspect.name));
+  }
+
+  /// Zoom on top of the fit preset, 100-300%.
+  void setZoomPercent(double percent) {
+    final clamped = normalizeZoomPercent(percent);
+    state = state.copyWith(zoomPercent: clamped);
+    unawaited(_rememberChannel(zoomPercent: clamped));
+  }
+
+  /// Rotates the picture by 0/90/180/270 degrees, for this video only.
+  void setRotation(int degrees) {
+    state = state.copyWith(rotationDegrees: normalizeRotation(degrees));
+  }
+
+  /// Mirrors the picture left-to-right, for this video only.
+  void setFlipHorizontal(bool flipped) {
+    state = state.copyWith(flipHorizontal: flipped);
+  }
+
   /// Volume as a percentage. SmartTube allows boosting past 100%, which
   /// mpv supports natively (with clipping risk, hence the warning in the
   /// menu).
@@ -1050,11 +1123,14 @@ class PlayerController extends StateNotifier<PlayerStateData>
 
   /// Selects an external subtitle track, or clears it when [subtitle] is
   /// null. Tracks come from the video's caption list.
-  Future<void> selectSubtitle(MediaSubtitle? subtitle) async {
+  Future<void> selectSubtitle(
+    MediaSubtitle? subtitle, {
+    bool remember = true,
+  }) async {
     if (subtitle == null) {
       await _player.setSubtitleTrack(SubtitleTrack.no());
       state = state.copyWith(clearSubtitle: true);
-      await _rememberChannel(clearSubtitle: true);
+      if (remember) await _rememberChannel(clearSubtitle: true);
       return;
     }
     // Route captions through the proxy too: the same TLS limitation
@@ -1066,7 +1142,19 @@ class PlayerController extends StateNotifier<PlayerStateData>
       SubtitleTrack.uri(local, title: subtitle.name, language: subtitle.code),
     );
     state = state.copyWith(selectedSubtitle: subtitle);
-    await _rememberChannel(subtitleCode: subtitle.code);
+    if (remember) await _rememberChannel(subtitleCode: subtitle.code);
+  }
+
+  /// The caption language to switch on by default, or null when the
+  /// viewer has turned automatic selection off.
+  String? _preferredSubtitleLanguage() {
+    final settings = _ref.read(settingsControllerProvider);
+    return resolvePreferredSubtitleLanguage(
+      settings.preferredSubtitleLanguage,
+      appLanguage: settings.language,
+      deviceLanguage:
+          WidgetsBinding.instance.platformDispatcher.locale.languageCode,
+    );
   }
 
   Future<void> selectAudioTrack(ResolvedAudioTrack track) async {
@@ -1131,6 +1219,8 @@ class PlayerController extends StateNotifier<PlayerStateData>
     double? subtitleOffset,
     double? subtitleBackgroundOpacity,
     String? videoFit,
+    String? videoAspect,
+    double? zoomPercent,
     bool clearSubtitle = false,
     bool clearQualityHeight = false,
   }) async {
@@ -1150,6 +1240,8 @@ class PlayerController extends StateNotifier<PlayerStateData>
         subtitleOffset: subtitleOffset,
         subtitleBackgroundOpacity: subtitleBackgroundOpacity,
         videoFit: videoFit,
+        videoAspect: videoAspect,
+        zoomPercent: zoomPercent,
         clearSubtitle: clearSubtitle,
         clearQualityHeight: clearQualityHeight,
       ),

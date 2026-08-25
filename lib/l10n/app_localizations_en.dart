@@ -1147,4 +1147,58 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get autoQualityLabel => 'Auto';
+
+  @override
+  String degreesValue(int degrees) {
+    return '$degrees°';
+  }
+
+  @override
+  String get videoAspect => 'Aspect ratio';
+
+  @override
+  String get videoAspectAuto => 'Auto';
+
+  @override
+  String get videoRotate => 'Rotate';
+
+  @override
+  String get videoFlipHorizontal => 'Flip horizontally';
+
+  @override
+  String get videoZoomPercent => 'Zoom';
+
+  @override
+  String get subtitleStyle => 'Subtitle style';
+
+  @override
+  String get subtitleStylePreview => 'The quick brown fox';
+
+  @override
+  String get subtitleStyleDefault => 'Default';
+
+  @override
+  String get subtitleStyleWhite => 'White';
+
+  @override
+  String get subtitleStyleWhiteOnBlack => 'White on black';
+
+  @override
+  String get subtitleStyleYellow => 'Yellow';
+
+  @override
+  String get subtitleStyleYellowOnBlack => 'Yellow on black';
+
+  @override
+  String get subtitleStyleCustom => 'Custom';
+
+  @override
+  String get defaultSubtitleLanguage => 'Default subtitles';
+
+  @override
+  String get defaultSubtitleLanguageSubtitle =>
+      'Turn captions on automatically in this language';
+
+  @override
+  String get subtitleLanguageAppDefault => 'App language';
 }

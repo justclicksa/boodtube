@@ -538,5 +538,29 @@
   "autoplayNextSubtitle": "Continue with the next suggested video",
   "autoQuality": "Auto quality",
   "autoQualitySubtitle": "Pick resolution from your connection speed",
-  "autoQualityLabel": "Auto"
+  "autoQualityLabel": "Auto",
+  "degreesValue": "{degrees}°",
+  "@degreesValue": {
+    "placeholders": {
+      "degrees": {
+        "type": "int"
+      }
+    }
+  },
+  "videoAspect": "Aspect ratio",
+  "videoAspectAuto": "Auto",
+  "videoRotate": "Rotate",
+  "videoFlipHorizontal": "Flip horizontally",
+  "videoZoomPercent": "Zoom",
+  "subtitleStyle": "Subtitle style",
+  "subtitleStylePreview": "The quick brown fox",
+  "subtitleStyleDefault": "Default",
+  "subtitleStyleWhite": "White",
+  "subtitleStyleWhiteOnBlack": "White on black",
+  "subtitleStyleYellow": "Yellow",
+  "subtitleStyleYellowOnBlack": "Yellow on black",
+  "subtitleStyleCustom": "Custom",
+  "defaultSubtitleLanguage": "Default subtitles",
+  "defaultSubtitleLanguageSubtitle": "Turn captions on automatically in this language",
+  "subtitleLanguageAppDefault": "App language"
 }

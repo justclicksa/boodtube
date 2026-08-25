@@ -17,6 +17,8 @@ import '../../../l10n/enum_labels.dart';
 import '../../../providers/player_providers.dart';
 import '../../../providers/settings_providers.dart';
 import '../../../theme/app_theme.dart';
+import '../subtitle_styles.dart';
+import '../video_transform.dart';
 
 /// Opens the playback menu.
 ///
@@ -66,6 +68,8 @@ enum _SheetPage {
   volume,
   queue,
   videoFit,
+  videoAspect,
+  subtitleStyle,
   seekInterval,
   stats,
 }
@@ -105,6 +109,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
       _SheetPage.volume => _VolumeMenu(onBack: _back),
       _SheetPage.queue => _QueueMenu(onBack: _back),
       _SheetPage.videoFit => _VideoFitMenu(onBack: _back),
+      _SheetPage.videoAspect => _VideoAspectMenu(onBack: _back),
+      _SheetPage.subtitleStyle => _SubtitleStyleMenu(onBack: _back),
       _SheetPage.seekInterval => _SeekIntervalMenu(onBack: _back),
       _SheetPage.stats => _StatsMenu(onBack: _back),
     };
@@ -207,6 +213,18 @@ class _RootMenu extends ConsumerWidget {
               title: l10n.videoZoom,
               value: state.videoFit.label(l10n),
               onTap: () => onOpen(_SheetPage.videoFit),
+            ),
+            _MenuRow(
+              icon: Icons.crop,
+              title: l10n.videoAspect,
+              value: state.videoAspect.label(l10n),
+              onTap: () => onOpen(_SheetPage.videoAspect),
+            ),
+            _MenuRow(
+              icon: Icons.subtitles_outlined,
+              title: l10n.subtitleStyle,
+              value: subtitleStyleFromName(settings.subtitleStyle).label(l10n),
+              onTap: () => onOpen(_SheetPage.subtitleStyle),
             ),
             _MenuRow(
               icon: Icons.fast_forward,
@@ -442,9 +460,23 @@ class _AudioTrackMenu extends ConsumerWidget {
           value: state.subtitleBackgroundOpacity,
           min: 0,
           max: 0.95,
-          onChanged: (value) => ref
-              .read(playerControllerProvider.notifier)
-              .setSubtitleStyle(backgroundOpacity: value),
+          onChanged: (value) {
+            ref
+                .read(playerControllerProvider.notifier)
+                .setSubtitleStyle(backgroundOpacity: value);
+            // The fixed presets own their background, so dragging this
+            // slider is by definition a custom look. Switching the
+            // preset here is what keeps the slider from silently doing
+            // nothing while "Yellow on black" is selected.
+            final current = subtitleStyleFromName(
+              ref.read(settingsControllerProvider).subtitleStyle,
+            );
+            if (current != SubtitleStyle.custom) {
+              ref
+                  .read(settingsControllerProvider.notifier)
+                  .setSubtitleStyle(SubtitleStyle.custom);
+            }
+          },
         ),
       ],
     );
@@ -721,7 +753,8 @@ class _VideoFitMenu extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final current = ref.watch(playerControllerProvider).videoFit;
+    final state = ref.watch(playerControllerProvider);
+    final notifier = ref.read(playerControllerProvider.notifier);
     return _SubSheet(
       onBack: onBack,
       title: l10n.videoZoom,
@@ -729,13 +762,184 @@ class _VideoFitMenu extends ConsumerWidget {
         for (final fit in VideoFit.values)
           _CheckRow(
             label: fit.label(l10n),
-            selected: current == fit,
+            selected: state.videoFit == fit,
             onTap: () {
-              ref.read(playerControllerProvider.notifier).setVideoFit(fit);
+              notifier.setVideoFit(fit);
+              Navigator.of(context).pop();
+            },
+          ),
+        const Divider(),
+        // SmartTube's "zoom percents", on top of the preset. The sheet
+        // stays open: the point of a slider is watching the picture move.
+        _SliderRow(
+          label: l10n.videoZoomPercent,
+          value: l10n.percentValue(state.zoomPercent.round()),
+          slider: Slider(
+            value: normalizeZoomPercent(state.zoomPercent),
+            min: minZoomPercent,
+            max: maxZoomPercent,
+            divisions: ((maxZoomPercent - minZoomPercent) / 5).round(),
+            label: l10n.percentValue(state.zoomPercent.round()),
+            onChanged: notifier.setZoomPercent,
+          ),
+        ),
+        const Divider(),
+        ListTile(title: Text(l10n.videoRotate)),
+        for (final angle in videoRotationAngles)
+          _CheckRow(
+            label: l10n.degreesValue(angle),
+            selected: state.rotationDegrees == angle,
+            onTap: () => notifier.setRotation(angle),
+          ),
+        SwitchListTile(
+          secondary: const Icon(Icons.flip),
+          title: Text(l10n.videoFlipHorizontal),
+          value: state.flipHorizontal,
+          onChanged: notifier.setFlipHorizontal,
+        ),
+      ],
+    );
+  }
+}
+
+/// Forced display ratio — SmartTube's `createVideoAspectCategory`.
+class _VideoAspectMenu extends ConsumerWidget {
+  const _VideoAspectMenu({required this.onBack});
+
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final current = ref.watch(playerControllerProvider).videoAspect;
+    return _SubSheet(
+      onBack: onBack,
+      title: l10n.videoAspect,
+      children: [
+        for (final aspect in VideoAspect.values)
+          _CheckRow(
+            label: aspect.label(l10n),
+            selected: current == aspect,
+            onTap: () {
+              ref
+                  .read(playerControllerProvider.notifier)
+                  .setVideoAspect(aspect);
               Navigator.of(context).pop();
             },
           ),
       ],
+    );
+  }
+}
+
+/// Caption presets with a live sample line above them.
+class _SubtitleStyleMenu extends ConsumerWidget {
+  const _SubtitleStyleMenu({required this.onBack});
+
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final settings = ref.watch(settingsControllerProvider);
+    final player = ref.watch(playerControllerProvider);
+    final current = subtitleStyleFromName(settings.subtitleStyle);
+    return _SubSheet(
+      onBack: onBack,
+      title: l10n.subtitleStyle,
+      children: [
+        _SubtitleStylePreview(
+          style: current,
+          scale: player.subtitleScale,
+          backgroundOpacity: player.subtitleBackgroundOpacity,
+        ),
+        for (final style in SubtitleStyle.values)
+          _CheckRow(
+            label: style.label(l10n),
+            selected: current == style,
+            // No pop: the preview above is the whole point of the page.
+            onTap: () => ref
+                .read(settingsControllerProvider.notifier)
+                .setSubtitleStyle(style),
+          ),
+      ],
+    );
+  }
+}
+
+class _SubtitleStylePreview extends StatelessWidget {
+  const _SubtitleStylePreview({
+    required this.style,
+    required this.scale,
+    required this.backgroundOpacity,
+  });
+
+  final SubtitleStyle style;
+  final double scale;
+  final double backgroundOpacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm,
+      ),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        // Mid grey, not black: a transparent caption background has to
+        // look different from a solid black one.
+        color: const Color(0xFF3A3A3A),
+        borderRadius: BorderRadius.circular(AppSpacing.sm),
+      ),
+      child: Text(
+        AppLocalizations.of(context).subtitleStylePreview,
+        textAlign: TextAlign.center,
+        style: subtitleTextStyleFor(
+          style,
+          scale: scale,
+          customBackgroundOpacity: backgroundOpacity,
+          // The real captions are drawn over a full-width video; 28pt in
+          // a bottom sheet would wrap.
+          baseFontSize: 16,
+        ),
+      ),
+    );
+  }
+}
+
+/// A labelled slider with its current value on the right.
+class _SliderRow extends StatelessWidget {
+  const _SliderRow({
+    required this.label,
+    required this.value,
+    required this.slider,
+  });
+
+  final String label;
+  final String value;
+  final Widget slider;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(label)),
+              Text(
+                value,
+                style: TextStyle(color: Theme.of(context).yt.secondaryText),
+              ),
+            ],
+          ),
+          slider,
+        ],
+      ),
     );
   }
 }
