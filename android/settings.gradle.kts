@@ -24,3 +24,9 @@ plugins {
 }
 
 include(":app")
+
+// Pulls in the forked ExoPlayer (incl. the SABR module) and
+// MediaServiceCore from the parent SmartTube checkout, so the Flutter app
+// plays video with the same engine the TV app does. See the script for
+// the AGP 7 -> 8 shims those modules need.
+apply(from = "smarttube-modules.gradle")
