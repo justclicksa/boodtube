@@ -25,6 +25,9 @@ AudioOnlyStreamInfo _$AudioOnlyStreamInfoFromJson(Map<String, dynamic> json) =>
       json['audioTrack'] == null
           ? null
           : AudioTrack.fromJson(json['audioTrack'] as Map<String, dynamic>),
+      initRange: json['initRange'] as String?,
+      indexRange: json['indexRange'] as String?,
+      audioSamplingRate: (json['audioSamplingRate'] as num?)?.toInt(),
     );
 
 Map<String, dynamic> _$AudioOnlyStreamInfoToJson(
@@ -41,4 +44,7 @@ Map<String, dynamic> _$AudioOnlyStreamInfoToJson(
       'fragments': instance.fragments,
       'qualityLabel': instance.qualityLabel,
       'audioTrack': instance.audioTrack,
+      'initRange': instance.initRange,
+      'indexRange': instance.indexRange,
+      'audioSamplingRate': instance.audioSamplingRate,
     };

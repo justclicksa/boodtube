@@ -1160,4 +1160,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get autoQualityLabel => 'تلقائي';
+
+  @override
+  String get adaptiveStreaming => 'البث التكيفي (DASH)';
+
+  @override
+  String get adaptiveStreamingSubtitle =>
+      'تجريبي: ترك المشغل يدمج الفيديو والصوت بنفسه';
 }

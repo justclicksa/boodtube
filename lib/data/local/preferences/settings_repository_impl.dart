@@ -132,6 +132,11 @@ class AppSettings {
   /// fixed [defaultQuality] cap, and step down on stalls.
   final bool autoQuality;
 
+  /// Hand the player a client-built DASH manifest instead of two
+  /// separate progressive URLs, so ffmpeg muxes video and audio itself.
+  /// Off by default: the progressive path is the proven one.
+  final bool adaptiveStreaming;
+
   /// Ordered shortcuts shown in the player's top bar. The settings gear
   /// is always retained as an escape hatch even if an old backup omits it.
   final List<PlayerQuickAction> playerQuickActions;
@@ -161,6 +166,7 @@ class AppSettings {
     this.showRemainingTime = false,
     this.autoplayNext = true,
     this.autoQuality = true,
+    this.adaptiveStreaming = false,
     this.playerQuickActions = const [
       PlayerQuickAction.cast,
       PlayerQuickAction.pictureInPicture,
@@ -188,6 +194,7 @@ class AppSettings {
     bool? showRemainingTime,
     bool? autoplayNext,
     bool? autoQuality,
+    bool? adaptiveStreaming,
     List<PlayerQuickAction>? playerQuickActions,
   }) {
     return AppSettings(
@@ -210,6 +217,7 @@ class AppSettings {
       showRemainingTime: showRemainingTime ?? this.showRemainingTime,
       autoplayNext: autoplayNext ?? this.autoplayNext,
       autoQuality: autoQuality ?? this.autoQuality,
+      adaptiveStreaming: adaptiveStreaming ?? this.adaptiveStreaming,
       playerQuickActions: playerQuickActions ?? this.playerQuickActions,
     );
   }
@@ -237,6 +245,7 @@ class SettingsRepository {
   static const _keyRemainingTime = 'settings.remaining_time';
   static const _keyAutoplayNext = 'settings.autoplay_next';
   static const _keyAutoQuality = 'settings.auto_quality';
+  static const _keyAdaptiveStreaming = 'settings.adaptive_streaming';
   static const _keyPlayerQuickActions = 'settings.player_quick_actions';
   static const _keyChannelPlayback = 'settings.channel_playback';
 
@@ -268,6 +277,7 @@ class SettingsRepository {
       showRemainingTime: _prefs.getBool(_keyRemainingTime) ?? false,
       autoplayNext: _prefs.getBool(_keyAutoplayNext) ?? true,
       autoQuality: _prefs.getBool(_keyAutoQuality) ?? true,
+      adaptiveStreaming: _prefs.getBool(_keyAdaptiveStreaming) ?? false,
       playerQuickActions: _readPlayerQuickActions(),
     );
   }
@@ -294,6 +304,10 @@ class SettingsRepository {
 
   Future<void> setAutoQuality(bool enabled) async {
     await _prefs.setBool(_keyAutoQuality, enabled);
+  }
+
+  Future<void> setAdaptiveStreaming(bool enabled) async {
+    await _prefs.setBool(_keyAdaptiveStreaming, enabled);
   }
 
   Future<void> setSponsorBlockEnabled(bool enabled) async {

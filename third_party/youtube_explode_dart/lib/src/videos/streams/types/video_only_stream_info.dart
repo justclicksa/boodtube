@@ -53,6 +53,12 @@ class VideoOnlyStreamInfo with StreamInfo, VideoStreamInfo {
   @JsonKey(toJson: mediaTypeToJson, fromJson: mediaTypeFromJson)
   final MediaType codec;
 
+  @override
+  final String? initRange;
+
+  @override
+  final String? indexRange;
+
   VideoOnlyStreamInfo(
     this.videoId,
     this.tag,
@@ -66,8 +72,10 @@ class VideoOnlyStreamInfo with StreamInfo, VideoStreamInfo {
     this.videoResolution,
     this.framerate,
     this.fragments,
-    this.codec,
-  );
+    this.codec, {
+    this.initRange,
+    this.indexRange,
+  });
 
   @override
   String toString() =>

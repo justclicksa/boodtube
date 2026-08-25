@@ -517,5 +517,7 @@
   "autoplayNextSubtitle": "المتابعة بالمقطع المقترح التالي",
   "autoQuality": "جودة تلقائية",
   "autoQualitySubtitle": "اختيار الدقة حسب سرعة الاتصال",
-  "autoQualityLabel": "تلقائي"
+  "autoQualityLabel": "تلقائي",
+  "adaptiveStreaming": "البث التكيفي (DASH)",
+  "adaptiveStreamingSubtitle": "تجريبي: ترك المشغل يدمج الفيديو والصوت بنفسه"
 }

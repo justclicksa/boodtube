@@ -1147,4 +1147,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get autoQualityLabel => 'Auto';
+
+  @override
+  String get adaptiveStreaming => 'Adaptive streaming (DASH)';
+
+  @override
+  String get adaptiveStreamingSubtitle =>
+      'Experimental: let the player combine video and audio itself';
 }

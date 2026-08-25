@@ -271,6 +271,27 @@ class _StreamInfo extends StreamInfoProvider {
   }
 
   @override
+  late final String? initRange = _byteRange('initRange');
+
+  @override
+  late final String? indexRange = _byteRange('indexRange');
+
+  @override
+  late final int? audioSamplingRate =
+      int.tryParse(root.getT<String>('audioSampleRate') ?? '');
+
+  /// InnerTube reports the DASH ranges as `{"start": "0", "end": "739"}`.
+  /// Flattened here to the `start-end` form an MPD attribute expects.
+  String? _byteRange(String key) {
+    final start = root.getJson<String>('$key/start');
+    final end = root.getJson<String>('$key/end');
+    if (start == null || end == null) {
+      return null;
+    }
+    return '$start-$end';
+  }
+
+  @override
   final StreamSource source;
 
   _StreamInfo(this.root, this.source);

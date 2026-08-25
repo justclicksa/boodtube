@@ -538,5 +538,7 @@
   "autoplayNextSubtitle": "Continue with the next suggested video",
   "autoQuality": "Auto quality",
   "autoQualitySubtitle": "Pick resolution from your connection speed",
-  "autoQualityLabel": "Auto"
+  "autoQualityLabel": "Auto",
+  "adaptiveStreaming": "Adaptive streaming (DASH)",
+  "adaptiveStreamingSubtitle": "Experimental: let the player combine video and audio itself"
 }
