@@ -2101,6 +2101,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Auto'**
   String get autoQualityLabel;
+
+  /// No description provided for @videoBuffer.
+  ///
+  /// In en, this message translates to:
+  /// **'Video buffer'**
+  String get videoBuffer;
+
+  /// No description provided for @videoBufferSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How far ahead the player downloads'**
+  String get videoBufferSubtitle;
+
+  /// No description provided for @bufferLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get bufferLow;
+
+  /// No description provided for @bufferMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get bufferMedium;
+
+  /// No description provided for @bufferHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get bufferHigh;
+
+  /// No description provided for @bufferHighest.
+  ///
+  /// In en, this message translates to:
+  /// **'Highest'**
+  String get bufferHighest;
+
+  /// No description provided for @audioDelay.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio delay'**
+  String get audioDelay;
+
+  /// No description provided for @audioDelaySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift the sound against the picture'**
+  String get audioDelaySubtitle;
+
+  /// No description provided for @audioDelayValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} ms'**
+  String audioDelayValue(int value);
+
+  /// No description provided for @audioDelayNone.
+  ///
+  /// In en, this message translates to:
+  /// **'In sync'**
+  String get audioDelayNone;
+
+  /// No description provided for @keepPitch.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep pitch'**
+  String get keepPitch;
+
+  /// No description provided for @keepPitchSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep voices natural when the speed changes'**
+  String get keepPitchSubtitle;
+
+  /// No description provided for @cacheAhead.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache ahead'**
+  String get cacheAhead;
+
+  /// No description provided for @cacheState.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache state'**
+  String get cacheState;
+
+  /// No description provided for @videoBitrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Video bitrate'**
+  String get videoBitrate;
+
+  /// No description provided for @audioBitrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio bitrate'**
+  String get audioBitrate;
+
+  /// No description provided for @hardwareDecoder.
+  ///
+  /// In en, this message translates to:
+  /// **'Hardware decoder'**
+  String get hardwareDecoder;
+
+  /// No description provided for @engineCodec.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine codec'**
+  String get engineCodec;
+
+  /// No description provided for @droppedFrames.
+  ///
+  /// In en, this message translates to:
+  /// **'Dropped frames'**
+  String get droppedFrames;
+
+  /// No description provided for @videoBufferLiveNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Live broadcasts always use the low buffer'**
+  String get videoBufferLiveNote;
 }
 
 class _AppLocalizationsDelegate

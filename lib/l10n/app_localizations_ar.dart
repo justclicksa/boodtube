@@ -1160,4 +1160,67 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get autoQualityLabel => 'تلقائي';
+
+  @override
+  String get videoBuffer => 'مخزن الفيديو';
+
+  @override
+  String get videoBufferSubtitle => 'مقدار ما يحمّله المشغل مسبقًا';
+
+  @override
+  String get bufferLow => 'منخفض';
+
+  @override
+  String get bufferMedium => 'متوسط';
+
+  @override
+  String get bufferHigh => 'مرتفع';
+
+  @override
+  String get bufferHighest => 'الأعلى';
+
+  @override
+  String get audioDelay => 'تأخير الصوت';
+
+  @override
+  String get audioDelaySubtitle => 'إزاحة الصوت مقابل الصورة';
+
+  @override
+  String audioDelayValue(int value) {
+    return '$value مللي ثانية';
+  }
+
+  @override
+  String get audioDelayNone => 'متزامن';
+
+  @override
+  String get keepPitch => 'الحفاظ على طبقة الصوت';
+
+  @override
+  String get keepPitchSubtitle => 'إبقاء الأصوات طبيعية عند تغيير السرعة';
+
+  @override
+  String get cacheAhead => 'التخزين المسبق';
+
+  @override
+  String get cacheState => 'حالة التخزين';
+
+  @override
+  String get videoBitrate => 'معدل بت الفيديو';
+
+  @override
+  String get audioBitrate => 'معدل بت الصوت';
+
+  @override
+  String get hardwareDecoder => 'فك الترميز بالعتاد';
+
+  @override
+  String get engineCodec => 'ترميز المحرك';
+
+  @override
+  String get droppedFrames => 'الإطارات المسقطة';
+
+  @override
+  String get videoBufferLiveNote =>
+      'تستخدم البثوث المباشرة دائمًا المخزن المنخفض';
 }

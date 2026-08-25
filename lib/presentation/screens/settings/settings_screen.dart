@@ -16,6 +16,7 @@ import '../../../domain/entities/content_filter.dart';
 import '../../../domain/entities/media_format.dart';
 import '../../../domain/entities/sponsor_segment.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../services/player_tuning.dart';
 import '../../l10n/enum_labels.dart';
 import '../../l10n/locale_preference.dart';
 import '../../providers/auth_providers.dart';
@@ -201,6 +202,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               title: Text(l10n.defaultSpeed),
               subtitle: Text('${settings.defaultSpeed}x'),
               onTap: () => _showSpeedPicker(settings, controller),
+            ),
+          ),
+          _SettingsRow(
+            keywords: [l10n.videoBuffer, l10n.videoBufferSubtitle],
+            widget: ListTile(
+              leading: const Icon(Icons.download_for_offline_outlined),
+              title: Text(l10n.videoBuffer),
+              subtitle: Text(
+                '${settings.bufferPreset.label(l10n)} · '
+                '${settings.bufferPreset.secondsLabel(l10n)}',
+              ),
+              onTap: () => _showBufferPicker(settings, controller),
             ),
           ),
           _SettingsRow(
@@ -524,6 +537,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Navigator.pop(context);
             },
             title: Text(s == 1.0 ? l10n.normal : '${s}x'),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  /// SmartTube's video buffer, chosen outside the player too — the
+  /// running playback picks the change up on its next open, and
+  /// immediately when set from the player's own sheet.
+  void _showBufferPicker(AppSettings settings, SettingsController controller) {
+    final l10n = AppLocalizations.of(context);
+    showDialog<void>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(l10n.videoBuffer),
+        children: BufferPreset.values.map((preset) {
+          return RadioListTile<BufferPreset>(
+            value: preset,
+            groupValue: settings.bufferPreset,
+            onChanged: (value) {
+              if (value != null) controller.setBufferPreset(value);
+              Navigator.pop(context);
+            },
+            title: Text(preset.label(l10n)),
+            subtitle: Text(preset.secondsLabel(l10n)),
           );
         }).toList(),
       ),

@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../domain/entities/content_filter.dart';
 import '../../../domain/entities/media_format.dart';
 import '../../../domain/entities/sponsor_segment.dart';
+import '../../../services/player_tuning.dart';
 
 enum PlayerQuickAction {
   cast,
@@ -34,6 +35,7 @@ class ChannelPlaybackPreferences {
     this.subtitleOffset,
     this.subtitleBackgroundOpacity,
     this.videoFit,
+    this.audioDelayMs,
   });
 
   final double? speed;
@@ -45,6 +47,9 @@ class ChannelPlaybackPreferences {
   final double? subtitleBackgroundOpacity;
   final String? videoFit;
 
+  /// SmartTube's audio shift, in milliseconds, for this channel.
+  final int? audioDelayMs;
+
   ChannelPlaybackPreferences copyWith({
     double? speed,
     int? qualityHeight,
@@ -54,6 +59,7 @@ class ChannelPlaybackPreferences {
     double? subtitleOffset,
     double? subtitleBackgroundOpacity,
     String? videoFit,
+    int? audioDelayMs,
     bool clearSubtitle = false,
     bool clearQualityHeight = false,
   }) =>
@@ -69,6 +75,7 @@ class ChannelPlaybackPreferences {
         subtitleBackgroundOpacity:
             subtitleBackgroundOpacity ?? this.subtitleBackgroundOpacity,
         videoFit: videoFit ?? this.videoFit,
+        audioDelayMs: audioDelayMs ?? this.audioDelayMs,
       );
 
   Map<String, Object?> toJson() => {
@@ -81,6 +88,7 @@ class ChannelPlaybackPreferences {
         if (subtitleBackgroundOpacity != null)
           'subtitleBackgroundOpacity': subtitleBackgroundOpacity,
         if (videoFit != null) 'videoFit': videoFit,
+        if (audioDelayMs != null) 'audioDelayMs': audioDelayMs,
       };
 
   factory ChannelPlaybackPreferences.fromJson(Map<String, Object?> json) =>
@@ -94,6 +102,7 @@ class ChannelPlaybackPreferences {
         subtitleBackgroundOpacity:
             (json['subtitleBackgroundOpacity'] as num?)?.toDouble(),
         videoFit: json['videoFit'] as String?,
+        audioDelayMs: (json['audioDelayMs'] as num?)?.toInt(),
       );
 }
 
@@ -132,6 +141,13 @@ class AppSettings {
   /// fixed [defaultQuality] cap, and step down on stalls.
   final bool autoQuality;
 
+  /// How far ahead the player buffers — SmartTube's "Video buffer".
+  final BufferPreset bufferPreset;
+
+  /// Keep the voice pitch when the playback speed is not 1x. Off is
+  /// SmartTube's "pitch effect", where pitch rides the speed.
+  final bool keepPitch;
+
   /// Ordered shortcuts shown in the player's top bar. The settings gear
   /// is always retained as an escape hatch even if an old backup omits it.
   final List<PlayerQuickAction> playerQuickActions;
@@ -161,6 +177,8 @@ class AppSettings {
     this.showRemainingTime = false,
     this.autoplayNext = true,
     this.autoQuality = true,
+    this.bufferPreset = BufferPreset.medium,
+    this.keepPitch = true,
     this.playerQuickActions = const [
       PlayerQuickAction.cast,
       PlayerQuickAction.pictureInPicture,
@@ -188,6 +206,8 @@ class AppSettings {
     bool? showRemainingTime,
     bool? autoplayNext,
     bool? autoQuality,
+    BufferPreset? bufferPreset,
+    bool? keepPitch,
     List<PlayerQuickAction>? playerQuickActions,
   }) {
     return AppSettings(
@@ -210,6 +230,8 @@ class AppSettings {
       showRemainingTime: showRemainingTime ?? this.showRemainingTime,
       autoplayNext: autoplayNext ?? this.autoplayNext,
       autoQuality: autoQuality ?? this.autoQuality,
+      bufferPreset: bufferPreset ?? this.bufferPreset,
+      keepPitch: keepPitch ?? this.keepPitch,
       playerQuickActions: playerQuickActions ?? this.playerQuickActions,
     );
   }
@@ -238,6 +260,8 @@ class SettingsRepository {
   static const _keyAutoplayNext = 'settings.autoplay_next';
   static const _keyAutoQuality = 'settings.auto_quality';
   static const _keyPlayerQuickActions = 'settings.player_quick_actions';
+  static const _keyBufferPreset = 'settings.buffer_preset';
+  static const _keyKeepPitch = 'settings.keep_pitch';
   static const _keyChannelPlayback = 'settings.channel_playback';
 
   final SharedPreferences _prefs;
@@ -269,6 +293,8 @@ class SettingsRepository {
       autoplayNext: _prefs.getBool(_keyAutoplayNext) ?? true,
       autoQuality: _prefs.getBool(_keyAutoQuality) ?? true,
       playerQuickActions: _readPlayerQuickActions(),
+      bufferPreset: _readBufferPreset(),
+      keepPitch: _prefs.getBool(_keyKeepPitch) ?? true,
     );
   }
 
@@ -294,6 +320,14 @@ class SettingsRepository {
 
   Future<void> setAutoQuality(bool enabled) async {
     await _prefs.setBool(_keyAutoQuality, enabled);
+  }
+
+  Future<void> setBufferPreset(BufferPreset preset) async {
+    await _prefs.setString(_keyBufferPreset, preset.name);
+  }
+
+  Future<void> setKeepPitch(bool keepPitch) async {
+    await _prefs.setBool(_keyKeepPitch, keepPitch);
   }
 
   Future<void> setSponsorBlockEnabled(bool enabled) async {
@@ -473,6 +507,15 @@ class SettingsRepository {
     return AppThemeMode.values.firstWhere(
       (m) => m.name == value,
       orElse: () => AppThemeMode.dark,
+    );
+  }
+
+  BufferPreset _readBufferPreset() {
+    final value = _prefs.getString(_keyBufferPreset);
+    return BufferPreset.values.firstWhere(
+      (preset) => preset.name == value,
+      // Keep in sync with AppSettings.bufferPreset's default.
+      orElse: () => BufferPreset.medium,
     );
   }
 

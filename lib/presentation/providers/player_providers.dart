@@ -18,6 +18,7 @@ import '../../domain/entities/sponsor_segment.dart';
 import '../../domain/repositories/local_library_repository.dart';
 import '../../services/audio_player_handler.dart';
 import '../../services/history_sync.dart';
+import '../../services/player_tuning.dart';
 import 'auth_providers.dart';
 import 'content_providers.dart' show cachedMediaItem, relatedVideosProvider;
 import 'repository_providers.dart';
@@ -138,6 +139,7 @@ class PlayerStateData {
     this.subtitleScale = 1,
     this.subtitleOffset = 24,
     this.subtitleBackgroundOpacity = 0.67,
+    this.audioDelayMs = 0,
   });
 
   final MediaItem? currentItem;
@@ -185,6 +187,10 @@ class PlayerStateData {
   final double subtitleOffset;
   final double subtitleBackgroundOpacity;
 
+  /// SmartTube's audio shift: negative pulls the audio ahead of the
+  /// picture, positive pushes it back. Remembered per channel.
+  final int audioDelayMs;
+
   PlayerStateData copyWith({
     MediaItem? currentItem,
     bool? isPlaying,
@@ -222,6 +228,7 @@ class PlayerStateData {
     double? subtitleScale,
     double? subtitleOffset,
     double? subtitleBackgroundOpacity,
+    int? audioDelayMs,
     bool clearError = false,
     bool clearItem = false,
     bool clearSleepTimer = false,
@@ -280,6 +287,7 @@ class PlayerStateData {
       subtitleOffset: subtitleOffset ?? this.subtitleOffset,
       subtitleBackgroundOpacity:
           subtitleBackgroundOpacity ?? this.subtitleBackgroundOpacity,
+      audioDelayMs: audioDelayMs ?? this.audioDelayMs,
     );
   }
 }
@@ -517,6 +525,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
         subtitleOffset: channelPreferences?.subtitleOffset ?? 24,
         subtitleBackgroundOpacity:
             channelPreferences?.subtitleBackgroundOpacity ?? 0.67,
+        audioDelayMs: channelPreferences?.audioDelayMs ?? 0,
       );
 
       // A live broadcast is a rolling HLS playlist, not a file that can
@@ -609,6 +618,9 @@ class PlayerController extends StateNotifier<PlayerStateData>
     debugPrint('openLive[$videoId]: opening HLS playlist');
     await _player.open(Media(url));
     await _player.setRate(1);
+    // A rolling playlist gets the low buffer whatever the preference
+    // says; see effectiveBufferPreset().
+    await applyEngineTuning(isLive: true);
     return true;
   }
 
@@ -679,6 +691,9 @@ class PlayerController extends StateNotifier<PlayerStateData>
     proxy.retainOnly([localVideoUrl, if (localAudioUrl != null) localAudioUrl]);
 
     await _player.open(Media(localVideoUrl));
+    // mpv resets audio-delay and the demuxer limits per file, so the
+    // tweaks are re-asserted on every open rather than only at startup.
+    await applyEngineTuning(isLive: false);
     await _player.setRate(state.playbackSpeed);
     if (localAudioUrl != null) {
       await _player.setAudioTrack(AudioTrack.uri(localAudioUrl));
@@ -1036,6 +1051,71 @@ class PlayerController extends StateNotifier<PlayerStateData>
     unawaited(_rememberChannel(speed: speed));
   }
 
+  // ============================================================
+  // Engine tweaks — buffer preset, audio delay, pitch
+  // ============================================================
+
+  /// Pushes the buffer preset, the audio delay and the pitch mode onto
+  /// mpv. Safe to call at any time; a no-op when the platform player is
+  /// not the native one (tests, web).
+  Future<void> applyEngineTuning({bool? isLive}) async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return;
+    final settings = _ref.read(settingsControllerProvider);
+    final properties = playerTuningProperties(
+      preset: settings.bufferPreset,
+      audioDelayMs: state.audioDelayMs,
+      keepPitch: settings.keepPitch,
+      isLive: isLive ?? state.currentItem?.isLive ?? false,
+      totalRamBytes: await readDeviceRamBytes(),
+    );
+    for (final entry in properties.entries) {
+      await _setEngineProperty(entry.key, entry.value);
+    }
+  }
+
+  /// One property, never fatal: an mpv build without a given option
+  /// should cost the user that tweak, not the video.
+  Future<void> _setEngineProperty(String name, String value) async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return;
+    try {
+      await platform.setProperty(name, value);
+    } catch (e) {
+      debugPrint('player tuning: $name=$value rejected ($e)');
+    }
+  }
+
+  /// Chooses how far ahead the player buffers. Persisted globally and
+  /// applied to the running playback immediately.
+  Future<void> setBufferPreset(BufferPreset preset) async {
+    await _ref
+        .read(settingsControllerProvider.notifier)
+        .setBufferPreset(preset);
+    await applyEngineTuning();
+  }
+
+  /// Shifts the audio against the picture, in milliseconds, and
+  /// remembers the choice for the current channel.
+  Future<void> setAudioDelay(int milliseconds) async {
+    final normalized = normalizeAudioDelayMs(milliseconds);
+    state = state.copyWith(audioDelayMs: normalized);
+    await _setEngineProperty('audio-delay', audioDelayProperty(normalized));
+    await _rememberChannel(audioDelayMs: normalized);
+  }
+
+  /// SmartTube's pitch effect, inverted: keeping the pitch is mpv's
+  /// default, turning it off lets the pitch ride the speed.
+  Future<void> setKeepPitch(bool keepPitch) async {
+    await _ref
+        .read(settingsControllerProvider.notifier)
+        .setKeepPitch(keepPitch);
+    await _setEngineProperty(
+      'audio-pitch-correction',
+      pitchCorrectionProperty(keepPitch: keepPitch),
+    );
+  }
+
   void setRepeatMode(RepeatMode mode) {
     state = state.copyWith(repeatMode: mode);
   }
@@ -1131,6 +1211,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
     double? subtitleOffset,
     double? subtitleBackgroundOpacity,
     String? videoFit,
+    int? audioDelayMs,
     bool clearSubtitle = false,
     bool clearQualityHeight = false,
   }) async {
@@ -1150,6 +1231,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
         subtitleOffset: subtitleOffset,
         subtitleBackgroundOpacity: subtitleBackgroundOpacity,
         videoFit: videoFit,
+        audioDelayMs: audioDelayMs,
         clearSubtitle: clearSubtitle,
         clearQualityHeight: clearQualityHeight,
       ),
@@ -1294,3 +1376,98 @@ final playerControllerProvider =
     StateNotifierProvider<PlayerController, PlayerStateData>(
   PlayerController.new,
 );
+
+// ============================================================
+// Network engine stats
+// ============================================================
+
+/// What mpv itself reports about the stream it is playing — the numbers
+/// SmartTube shows in its debug overlay, which no Flutter-side state
+/// mirror can answer (the demuxer cache, the decoder in use, dropped
+/// frames).
+class PlayerEngineStats {
+  const PlayerEngineStats({
+    this.cacheDuration,
+    this.cacheBufferingPercent,
+    this.videoBitrate,
+    this.audioBitrate,
+    this.hwdec,
+    this.videoCodec,
+    this.droppedFrames,
+  });
+
+  /// `demuxer-cache-duration` — seconds of media already downloaded
+  /// beyond the playhead.
+  final double? cacheDuration;
+
+  /// `cache-buffering-state` — 0-100 while mpv is filling the cache.
+  final int? cacheBufferingPercent;
+
+  /// `video-bitrate` / `audio-bitrate`, in bits per second.
+  final int? videoBitrate;
+  final int? audioBitrate;
+
+  /// `hwdec-current` — the hardware decoder actually in use, or "no".
+  final String? hwdec;
+
+  /// `video-codec` — the decoder's own description of the stream.
+  final String? videoCodec;
+
+  /// `frame-drop-count` — frames the decoder threw away to keep up.
+  final int? droppedFrames;
+
+  static const PlayerEngineStats empty = PlayerEngineStats();
+}
+
+/// Reads one property, treating any failure as "not available": mpv
+/// raises for properties that have no value yet (before the first
+/// frame) as readily as for ones it does not know.
+Future<String?> _engineProperty(NativePlayer platform, String name) async {
+  try {
+    final value = await platform.getProperty(name);
+    return value.isEmpty ? null : value;
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<PlayerEngineStats> readPlayerEngineStats(NativePlayer platform) async {
+  final values = <String, String?>{};
+  for (final name in const [
+    'demuxer-cache-duration',
+    'cache-buffering-state',
+    'video-bitrate',
+    'audio-bitrate',
+    'hwdec-current',
+    'video-codec',
+    'frame-drop-count',
+  ]) {
+    values[name] = await _engineProperty(platform, name);
+  }
+  return PlayerEngineStats(
+    cacheDuration: double.tryParse(values['demuxer-cache-duration'] ?? ''),
+    cacheBufferingPercent:
+        double.tryParse(values['cache-buffering-state'] ?? '')?.round(),
+    videoBitrate: double.tryParse(values['video-bitrate'] ?? '')?.round(),
+    audioBitrate: double.tryParse(values['audio-bitrate'] ?? '')?.round(),
+    hwdec: values['hwdec-current'],
+    videoCodec: values['video-codec'],
+    droppedFrames: double.tryParse(values['frame-drop-count'] ?? '')?.round(),
+  );
+}
+
+/// Polls mpv once a second. autoDispose is what bounds the polling: the
+/// stats page is the only listener, so nothing is asked of mpv while
+/// that page is closed.
+final playerEngineStatsProvider =
+    StreamProvider.autoDispose<PlayerEngineStats>((ref) async* {
+  final platform = ref.watch(mediaPlayerProvider).platform;
+  if (platform is! NativePlayer) {
+    yield PlayerEngineStats.empty;
+    return;
+  }
+  while (true) {
+    yield await readPlayerEngineStats(platform);
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+});

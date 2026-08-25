@@ -19,6 +19,7 @@ import 'presentation/routing/app_router.dart';
 import 'presentation/theme/app_theme.dart';
 import 'services/audio_player_handler.dart';
 import 'services/cast_service.dart';
+import 'services/player_tuning.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,7 +63,7 @@ void main() async {
       title: 'BoodTube',
     ),
   );
-  await _tunePlayerCache(player);
+  await _tunePlayerCache(player, SettingsRepository(prefs).load());
 
   // Nothing on the way to runApp is allowed to decide whether the app
   // renders. audio_service talks to platform channels that can throw or
@@ -93,16 +94,25 @@ void main() async {
 /// [PlayerConfiguration]. Read-ahead is what actually stops the relay's
 /// slice boundaries from being audible; the rest keeps a seek from
 /// throwing away everything already buffered.
-Future<void> _tunePlayerCache(Player player) async {
+Future<void> _tunePlayerCache(Player player, AppSettings settings) async {
   final platform = player.platform;
   if (platform is! NativePlayer) return;
   try {
-    await platform.setProperty('cache', 'yes');
-    await platform.setProperty('cache-secs', '60');
-    await platform.setProperty('demuxer-readahead-secs', '30');
+    // Buffer sizes, audio delay and pitch come from the saved tweaks
+    // (services/player_tuning.dart), which is also what PlayerController
+    // re-applies on every open. Nothing here is a literal any more, so
+    // the startup player and a mid-session preset change agree.
+    final tuning = playerTuningProperties(
+      preset: settings.bufferPreset,
+      audioDelayMs: 0,
+      keepPitch: settings.keepPitch,
+      totalRamBytes: await readDeviceRamBytes(),
+    );
+    for (final entry in tuning.entries) {
+      await platform.setProperty(entry.key, entry.value);
+    }
     // Keep what has already been demuxed when the user scrubs backwards.
     await platform.setProperty('demuxer-seekable-cache', 'yes');
-    await platform.setProperty('demuxer-max-back-bytes', '32MiB');
 
     // Live broadcasts are HLS, and YouTube spreads their segments over
     // several CDN hosts. ffmpeg tries to keep one connection alive

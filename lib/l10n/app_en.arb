@@ -538,5 +538,32 @@
   "autoplayNextSubtitle": "Continue with the next suggested video",
   "autoQuality": "Auto quality",
   "autoQualitySubtitle": "Pick resolution from your connection speed",
-  "autoQualityLabel": "Auto"
+  "autoQualityLabel": "Auto",
+  "videoBuffer": "Video buffer",
+  "videoBufferSubtitle": "How far ahead the player downloads",
+  "bufferLow": "Low",
+  "bufferMedium": "Medium",
+  "bufferHigh": "High",
+  "bufferHighest": "Highest",
+  "audioDelay": "Audio delay",
+  "audioDelaySubtitle": "Shift the sound against the picture",
+  "audioDelayValue": "{value} ms",
+  "@audioDelayValue": {
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
+  "audioDelayNone": "In sync",
+  "keepPitch": "Keep pitch",
+  "keepPitchSubtitle": "Keep voices natural when the speed changes",
+  "cacheAhead": "Cache ahead",
+  "cacheState": "Cache state",
+  "videoBitrate": "Video bitrate",
+  "audioBitrate": "Audio bitrate",
+  "hardwareDecoder": "Hardware decoder",
+  "engineCodec": "Engine codec",
+  "droppedFrames": "Dropped frames",
+  "videoBufferLiveNote": "Live broadcasts always use the low buffer"
 }

@@ -1147,4 +1147,66 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get autoQualityLabel => 'Auto';
+
+  @override
+  String get videoBuffer => 'Video buffer';
+
+  @override
+  String get videoBufferSubtitle => 'How far ahead the player downloads';
+
+  @override
+  String get bufferLow => 'Low';
+
+  @override
+  String get bufferMedium => 'Medium';
+
+  @override
+  String get bufferHigh => 'High';
+
+  @override
+  String get bufferHighest => 'Highest';
+
+  @override
+  String get audioDelay => 'Audio delay';
+
+  @override
+  String get audioDelaySubtitle => 'Shift the sound against the picture';
+
+  @override
+  String audioDelayValue(int value) {
+    return '$value ms';
+  }
+
+  @override
+  String get audioDelayNone => 'In sync';
+
+  @override
+  String get keepPitch => 'Keep pitch';
+
+  @override
+  String get keepPitchSubtitle => 'Keep voices natural when the speed changes';
+
+  @override
+  String get cacheAhead => 'Cache ahead';
+
+  @override
+  String get cacheState => 'Cache state';
+
+  @override
+  String get videoBitrate => 'Video bitrate';
+
+  @override
+  String get audioBitrate => 'Audio bitrate';
+
+  @override
+  String get hardwareDecoder => 'Hardware decoder';
+
+  @override
+  String get engineCodec => 'Engine codec';
+
+  @override
+  String get droppedFrames => 'Dropped frames';
+
+  @override
+  String get videoBufferLiveNote => 'Live broadcasts always use the low buffer';
 }

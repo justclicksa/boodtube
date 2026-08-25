@@ -12,6 +12,7 @@ import '../../domain/entities/media_format.dart';
 import '../../domain/entities/content_filter.dart';
 import '../../domain/entities/sponsor_segment.dart';
 import '../../services/backup_service.dart';
+import '../../services/player_tuning.dart';
 import 'repository_providers.dart';
 
 // ============================================================
@@ -80,6 +81,18 @@ class SettingsController extends StateNotifier<AppSettings> {
   Future<void> setAutoQuality(bool enabled) async {
     state = state.copyWith(autoQuality: enabled);
     await _repo.setAutoQuality(enabled);
+  }
+
+  /// SmartTube's "Video buffer". The running player picks the change
+  /// up through PlayerController.applyEngineTuning().
+  Future<void> setBufferPreset(BufferPreset preset) async {
+    state = state.copyWith(bufferPreset: preset);
+    await _repo.setBufferPreset(preset);
+  }
+
+  Future<void> setKeepPitch(bool keepPitch) async {
+    state = state.copyWith(keepPitch: keepPitch);
+    await _repo.setKeepPitch(keepPitch);
   }
 
   Future<void> setDoubleTapToSeek(bool enabled) async {

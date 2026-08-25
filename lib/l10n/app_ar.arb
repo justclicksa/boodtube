@@ -517,5 +517,32 @@
   "autoplayNextSubtitle": "المتابعة بالمقطع المقترح التالي",
   "autoQuality": "جودة تلقائية",
   "autoQualitySubtitle": "اختيار الدقة حسب سرعة الاتصال",
-  "autoQualityLabel": "تلقائي"
+  "autoQualityLabel": "تلقائي",
+  "videoBuffer": "مخزن الفيديو",
+  "videoBufferSubtitle": "مقدار ما يحمّله المشغل مسبقًا",
+  "bufferLow": "منخفض",
+  "bufferMedium": "متوسط",
+  "bufferHigh": "مرتفع",
+  "bufferHighest": "الأعلى",
+  "audioDelay": "تأخير الصوت",
+  "audioDelaySubtitle": "إزاحة الصوت مقابل الصورة",
+  "audioDelayValue": "{value} مللي ثانية",
+  "@audioDelayValue": {
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
+  "audioDelayNone": "متزامن",
+  "keepPitch": "الحفاظ على طبقة الصوت",
+  "keepPitchSubtitle": "إبقاء الأصوات طبيعية عند تغيير السرعة",
+  "cacheAhead": "التخزين المسبق",
+  "cacheState": "حالة التخزين",
+  "videoBitrate": "معدل بت الفيديو",
+  "audioBitrate": "معدل بت الصوت",
+  "hardwareDecoder": "فك الترميز بالعتاد",
+  "engineCodec": "ترميز المحرك",
+  "droppedFrames": "الإطارات المسقطة",
+  "videoBufferLiveNote": "تستخدم البثوث المباشرة دائمًا المخزن المنخفض"
 }

@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../domain/entities/media_subtitle.dart';
 import '../../../../domain/entities/sponsor_segment.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../services/player_tuning.dart';
 import '../../../l10n/enum_labels.dart';
 import '../../../providers/player_providers.dart';
 import '../../../providers/settings_providers.dart';
@@ -67,6 +68,8 @@ enum _SheetPage {
   queue,
   videoFit,
   seekInterval,
+  buffer,
+  audioDelay,
   stats,
 }
 
@@ -106,6 +109,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
       _SheetPage.queue => _QueueMenu(onBack: _back),
       _SheetPage.videoFit => _VideoFitMenu(onBack: _back),
       _SheetPage.seekInterval => _SeekIntervalMenu(onBack: _back),
+      _SheetPage.buffer => _BufferMenu(onBack: _back),
+      _SheetPage.audioDelay => _AudioDelayMenu(onBack: _back),
       _SheetPage.stats => _StatsMenu(onBack: _back),
     };
   }
@@ -213,6 +218,20 @@ class _RootMenu extends ConsumerWidget {
               title: l10n.seekInterval,
               value: l10n.secondsShort(state.seekInterval.inSeconds),
               onTap: () => onOpen(_SheetPage.seekInterval),
+            ),
+            _MenuRow(
+              icon: Icons.download_for_offline_outlined,
+              title: l10n.videoBuffer,
+              value: settings.bufferPreset.label(l10n),
+              onTap: () => onOpen(_SheetPage.buffer),
+            ),
+            _MenuRow(
+              icon: Icons.hearing_outlined,
+              title: l10n.audioDelay,
+              value: state.audioDelayMs == 0
+                  ? l10n.audioDelayNone
+                  : l10n.audioDelayValue(state.audioDelayMs),
+              onTap: () => onOpen(_SheetPage.audioDelay),
             ),
             _MenuRow(
               icon: Icons.info_outline,
@@ -331,6 +350,7 @@ class _SpeedMenu extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final current = ref.watch(playerControllerProvider).playbackSpeed;
+    final keepPitch = ref.watch(settingsControllerProvider).keepPitch;
     return _SubSheet(
       onBack: onBack,
       title: l10n.playbackSpeed,
@@ -344,6 +364,19 @@ class _SpeedMenu extends ConsumerWidget {
               Navigator.of(context).pop();
             },
           ),
+        const Divider(height: 1),
+        // SmartTube's pitch effect, phrased the way mpv models it: on
+        // means the voice stays where it is as the speed changes, off
+        // lets it ride the speed. The sheet stays open — this is a
+        // property of the speed above, not a choice that replaces it.
+        SwitchListTile(
+          secondary: const Icon(Icons.graphic_eq),
+          title: Text(l10n.keepPitch),
+          subtitle: Text(l10n.keepPitchSubtitle),
+          value: keepPitch,
+          onChanged: (value) =>
+              ref.read(playerControllerProvider.notifier).setKeepPitch(value),
+        ),
       ],
     );
   }
@@ -772,6 +805,155 @@ class _SeekIntervalMenu extends ConsumerWidget {
 }
 
 // ============================================================
+// Buffer / audio delay — SmartTube's player tweaks
+// ============================================================
+
+class _BufferMenu extends ConsumerWidget {
+  const _BufferMenu({required this.onBack});
+
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final current = ref.watch(settingsControllerProvider).bufferPreset;
+    final isLive =
+        ref.watch(playerControllerProvider).currentItem?.isLive ?? false;
+    return _SubSheet(
+      onBack: onBack,
+      title: l10n.videoBuffer,
+      children: [
+        for (final preset in BufferPreset.values)
+          _CheckRow(
+            label: preset.label(l10n),
+            selected: current == preset,
+            trailing: Text(
+              preset.secondsLabel(l10n),
+              style: TextStyle(color: Theme.of(context).yt.secondaryText),
+            ),
+            onTap: () {
+              ref
+                  .read(playerControllerProvider.notifier)
+                  .setBufferPreset(preset);
+              Navigator.of(context).pop();
+            },
+          ),
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(
+            20,
+            AppSpacing.sm,
+            20,
+            AppSpacing.lg,
+          ),
+          child: Text(
+            // A live broadcast ignores the choice (see
+            // effectiveBufferPreset), so say so instead of letting the
+            // tick lie about what the engine is doing.
+            isLive ? l10n.videoBufferLiveNote : l10n.videoBufferSubtitle,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AudioDelayMenu extends ConsumerStatefulWidget {
+  const _AudioDelayMenu({required this.onBack});
+
+  final VoidCallback onBack;
+
+  @override
+  ConsumerState<_AudioDelayMenu> createState() => _AudioDelayMenuState();
+}
+
+class _AudioDelayMenuState extends ConsumerState<_AudioDelayMenu> {
+  late int _delayMs;
+
+  @override
+  void initState() {
+    super.initState();
+    _delayMs = ref.read(playerControllerProvider).audioDelayMs;
+  }
+
+  /// A drag fires continuously; committing on every tick would write a
+  /// preference file per frame. The slider shows the local value and
+  /// only the released value reaches mpv and the channel preferences.
+  void _commit(int milliseconds) {
+    final normalized = normalizeAudioDelayMs(milliseconds);
+    setState(() => _delayMs = normalized);
+    ref.read(playerControllerProvider.notifier).setAudioDelay(normalized);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return _SubSheet(
+      onBack: widget.onBack,
+      title: l10n.audioDelay,
+      children: [
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(20, 0, 20, 0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                tooltip: l10n.audioDelayValue(-audioDelayStepMs),
+                icon: const Icon(Icons.remove),
+                onPressed: _delayMs <= audioDelayMinMs
+                    ? null
+                    : () => _commit(_delayMs - audioDelayStepMs),
+              ),
+              Text(
+                _delayMs == 0
+                    ? l10n.audioDelayNone
+                    : l10n.audioDelayValue(_delayMs),
+                style: theme.textTheme.titleMedium,
+              ),
+              IconButton(
+                tooltip: l10n.audioDelayValue(audioDelayStepMs),
+                icon: const Icon(Icons.add),
+                onPressed: _delayMs >= audioDelayMaxMs
+                    ? null
+                    : () => _commit(_delayMs + audioDelayStepMs),
+              ),
+            ],
+          ),
+        ),
+        Slider(
+          value: _delayMs.toDouble(),
+          min: audioDelayMinMs.toDouble(),
+          max: audioDelayMaxMs.toDouble(),
+          divisions: (audioDelayMaxMs - audioDelayMinMs) ~/ audioDelayStepMs,
+          label: l10n.audioDelayValue(_delayMs),
+          onChanged: (value) =>
+              setState(() => _delayMs = normalizeAudioDelayMs(value.round())),
+          onChangeEnd: (value) => _commit(value.round()),
+        ),
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(
+            20,
+            AppSpacing.xs,
+            20,
+            AppSpacing.sm,
+          ),
+          child: Text(
+            l10n.audioDelaySubtitle,
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+        if (_delayMs != 0)
+          TextButton(
+            onPressed: () => _commit(0),
+            child: Text(l10n.audioDelayNone),
+          ),
+      ],
+    );
+  }
+}
+
+// ============================================================
 // Stats for nerds
 // ============================================================
 
@@ -786,6 +968,8 @@ class _StatsMenu extends ConsumerWidget {
     final state = ref.watch(playerControllerProvider);
     final item = state.currentItem;
     final format = item?.bestFormat;
+    final engine = ref.watch(playerEngineStatsProvider).valueOrNull ??
+        PlayerEngineStats.empty;
 
     return _SubSheet(
       onBack: onBack,
@@ -823,6 +1007,29 @@ class _StatsMenu extends ConsumerWidget {
         ),
         _StatRow(l10n.speed, '${_trim(state.playbackSpeed)}x'),
         _StatRow(l10n.sponsorSegments, '${state.sponsorSegments.length}'),
+        const Divider(height: 1),
+        // Straight from mpv, refreshed once a second for as long as
+        // this page is on screen (see playerEngineStatsProvider).
+        _StatRow(
+          l10n.cacheAhead,
+          engine.cacheDuration == null
+              ? '—'
+              : '${engine.cacheDuration!.toStringAsFixed(1)}s',
+        ),
+        _StatRow(
+          l10n.cacheState,
+          engine.cacheBufferingPercent == null
+              ? '—'
+              : l10n.percentValue(engine.cacheBufferingPercent!),
+        ),
+        _StatRow(l10n.videoBitrate, _kbps(engine.videoBitrate)),
+        _StatRow(l10n.audioBitrate, _kbps(engine.audioBitrate)),
+        _StatRow(l10n.hardwareDecoder, engine.hwdec ?? '—'),
+        _StatRow(l10n.engineCodec, engine.videoCodec ?? '—'),
+        _StatRow(
+          l10n.droppedFrames,
+          engine.droppedFrames == null ? '—' : '${engine.droppedFrames}',
+        ),
       ],
     );
   }
@@ -1038,6 +1245,13 @@ class _CheckRow extends StatelessWidget {
     );
   }
 }
+
+/// mpv reports bits per second; the stats page speaks kbps like the
+/// rows above it.
+String _kbps(int? bitsPerSecond) =>
+    bitsPerSecond == null || bitsPerSecond <= 0
+        ? '—'
+        : '${(bitsPerSecond / 1000).round()} kbps';
 
 /// 1.0 -> "1", 1.25 -> "1.25"
 String _trim(double value) {

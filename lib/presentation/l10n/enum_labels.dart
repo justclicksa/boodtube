@@ -10,6 +10,7 @@ import '../../domain/entities/content_filter.dart';
 import '../../domain/entities/media_format.dart';
 import '../../domain/entities/sponsor_segment.dart';
 import '../../l10n/app_localizations.dart';
+import '../../services/player_tuning.dart';
 import '../providers/player_providers.dart';
 
 extension LocalizedQuality on MediaFormatQuality {
@@ -84,4 +85,18 @@ extension LocalizedVideoFit on VideoFit {
         VideoFit.stretch => l10n.fitStretch,
         VideoFit.zoom => l10n.fitZoom,
       };
+}
+
+extension LocalizedBufferPreset on BufferPreset {
+  String label(AppLocalizations l10n) => switch (this) {
+        BufferPreset.low => l10n.bufferLow,
+        BufferPreset.medium => l10n.bufferMedium,
+        BufferPreset.high => l10n.bufferHigh,
+        BufferPreset.highest => l10n.bufferHighest,
+      };
+
+  /// "30 sec" — the same number the mpv properties are derived from,
+  /// so the menu never drifts from what the engine was told.
+  String secondsLabel(AppLocalizations l10n) =>
+      l10n.secondsShort(bufferPresetSeconds[this]!);
 }
