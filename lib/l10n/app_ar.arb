@@ -517,5 +517,13 @@
   "autoplayNextSubtitle": "المتابعة بالمقطع المقترح التالي",
   "autoQuality": "جودة تلقائية",
   "autoQualitySubtitle": "اختيار الدقة حسب سرعة الاتصال",
-  "autoQualityLabel": "تلقائي"
+  "autoQualityLabel": "تلقائي",
+  "commentsSortTop": "الأكثر تفاعلًا",
+  "commentsSortNewest": "الأحدث أولًا",
+  "commentsSortLabel": "ترتيب التعليقات",
+  "hideReplies": "إخفاء الردود",
+  "commentPinned": "مثبّت",
+  "commentByCreator": "صاحب القناة",
+  "commentHeartedTooltip": "أعجب صاحب القناة بهذا التعليق",
+  "commentsCount": "{count} تعليق"
 }

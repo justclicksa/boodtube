@@ -538,5 +538,20 @@
   "autoplayNextSubtitle": "Continue with the next suggested video",
   "autoQuality": "Auto quality",
   "autoQualitySubtitle": "Pick resolution from your connection speed",
-  "autoQualityLabel": "Auto"
+  "autoQualityLabel": "Auto",
+  "commentsSortTop": "Top comments",
+  "commentsSortNewest": "Newest first",
+  "commentsSortLabel": "Sort comments",
+  "hideReplies": "Hide replies",
+  "commentPinned": "Pinned",
+  "commentByCreator": "Creator",
+  "commentHeartedTooltip": "Hearted by the creator",
+  "commentsCount": "{count} comments",
+  "@commentsCount": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  }
 }

@@ -2101,6 +2101,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Auto'**
   String get autoQualityLabel;
+
+  /// No description provided for @commentsSortTop.
+  ///
+  /// In en, this message translates to:
+  /// **'Top comments'**
+  String get commentsSortTop;
+
+  /// No description provided for @commentsSortNewest.
+  ///
+  /// In en, this message translates to:
+  /// **'Newest first'**
+  String get commentsSortNewest;
+
+  /// No description provided for @commentsSortLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort comments'**
+  String get commentsSortLabel;
+
+  /// No description provided for @hideReplies.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide replies'**
+  String get hideReplies;
+
+  /// No description provided for @commentPinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get commentPinned;
+
+  /// No description provided for @commentByCreator.
+  ///
+  /// In en, this message translates to:
+  /// **'Creator'**
+  String get commentByCreator;
+
+  /// No description provided for @commentHeartedTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Hearted by the creator'**
+  String get commentHeartedTooltip;
+
+  /// No description provided for @commentsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} comments'**
+  String commentsCount(String count);
 }
 
 class _AppLocalizationsDelegate

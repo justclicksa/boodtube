@@ -70,8 +70,11 @@ final castServiceProvider = Provider<CastService>((ref) {
   return CastService(ref.watch(streamResolverProvider));
 });
 
+/// Comments go through the shared InnerTube transport, not through
+/// youtube_explode's comment scraper — same reasoning as
+/// [channelBrowseClientProvider].
 final commentsServiceProvider = Provider<CommentsService>((ref) {
-  return CommentsService(ref.watch(youtubeExplodeProvider));
+  return CommentsService(ref.watch(youtubeHttpClientProvider));
 });
 
 /// Public like/dislike counts (YouTube hides dislikes).

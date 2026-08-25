@@ -1147,4 +1147,30 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get autoQualityLabel => 'Auto';
+
+  @override
+  String get commentsSortTop => 'Top comments';
+
+  @override
+  String get commentsSortNewest => 'Newest first';
+
+  @override
+  String get commentsSortLabel => 'Sort comments';
+
+  @override
+  String get hideReplies => 'Hide replies';
+
+  @override
+  String get commentPinned => 'Pinned';
+
+  @override
+  String get commentByCreator => 'Creator';
+
+  @override
+  String get commentHeartedTooltip => 'Hearted by the creator';
+
+  @override
+  String commentsCount(String count) {
+    return '$count comments';
+  }
 }
