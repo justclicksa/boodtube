@@ -672,5 +672,20 @@
   "sortTitle": "Title",
   "offlineQuality": "Offline",
   "offlineQualityNotice": "Playing your downloaded copy. Quality options need a connection.",
-  "downloadGone": "This download is no longer on the device"
+  "downloadGone": "This download is no longer on the device",
+  "commentsSortTop": "Top comments",
+  "commentsSortNewest": "Newest first",
+  "commentsSortLabel": "Sort comments",
+  "hideReplies": "Hide replies",
+  "commentPinned": "Pinned",
+  "commentByCreator": "Creator",
+  "commentHeartedTooltip": "Hearted by the creator",
+  "commentsCount": "{count} comments",
+  "@commentsCount": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  }
 }

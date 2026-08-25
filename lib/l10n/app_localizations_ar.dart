@@ -1431,4 +1431,30 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get downloadGone =>
       'ÙÙ ÙØ¹Ø¯ ÙØ°Ø§ Ø§ÙØªÙØ²ÙÙ ÙÙØ¬ÙØ¯ÙØ§ Ø¹ÙÙ Ø§ÙØ¬ÙØ§Ø²';
+
+  @override
+  String get commentsSortTop => 'الأكثر تفاعلًا';
+
+  @override
+  String get commentsSortNewest => 'الأحدث أولًا';
+
+  @override
+  String get commentsSortLabel => 'ترتيب التعليقات';
+
+  @override
+  String get hideReplies => 'إخفاء الردود';
+
+  @override
+  String get commentPinned => 'مثبّت';
+
+  @override
+  String get commentByCreator => 'صاحب القناة';
+
+  @override
+  String get commentHeartedTooltip => 'أعجب صاحب القناة بهذا التعليق';
+
+  @override
+  String commentsCount(String count) {
+    return '$count تعليق';
+  }
 }

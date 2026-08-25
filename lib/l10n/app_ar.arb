@@ -620,5 +620,13 @@
   "sortTitle": "Ø§ÙØ¹ÙÙØ§Ù",
   "offlineQuality": "Ø¯ÙÙ Ø§ØªØµØ§Ù",
   "offlineQualityNotice": "ØªØ´ØºÙÙ Ø§ÙÙØ³Ø®Ø© Ø§ÙÙÙØ²ÙÙØ©. Ø®ÙØ§Ø±Ø§Øª Ø§ÙØ¬ÙØ¯Ø© ØªØ­ØªØ§Ø¬ Ø¥ÙÙ Ø§ØªØµØ§Ù.",
-  "downloadGone": "ÙÙ ÙØ¹Ø¯ ÙØ°Ø§ Ø§ÙØªÙØ²ÙÙ ÙÙØ¬ÙØ¯ÙØ§ Ø¹ÙÙ Ø§ÙØ¬ÙØ§Ø²"
+  "downloadGone": "ÙÙ ÙØ¹Ø¯ ÙØ°Ø§ Ø§ÙØªÙØ²ÙÙ ÙÙØ¬ÙØ¯ÙØ§ Ø¹ÙÙ Ø§ÙØ¬ÙØ§Ø²",
+  "commentsSortTop": "الأكثر تفاعلًا",
+  "commentsSortNewest": "الأحدث أولًا",
+  "commentsSortLabel": "ترتيب التعليقات",
+  "hideReplies": "إخفاء الردود",
+  "commentPinned": "مثبّت",
+  "commentByCreator": "صاحب القناة",
+  "commentHeartedTooltip": "أعجب صاحب القناة بهذا التعليق",
+  "commentsCount": "{count} تعليق"
 }

@@ -31,6 +31,7 @@ import '../../../domain/entities/sponsor_segment.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../services/pip_manager.dart';
 import '../../l10n/enum_labels.dart';
+import '../../providers/comments_providers.dart';
 import '../../providers/content_providers.dart';
 import '../../providers/downloads_providers.dart';
 import '../../providers/local_library_providers.dart';
@@ -2009,7 +2010,12 @@ class _WatchDetails extends ConsumerWidget {
               ),
               _ActionPill(
                 icon: Icons.comment_outlined,
-                label: l10n.comments,
+                // YouTube prints the section total on the pill itself.
+                label: switch (
+                    ref.watch(commentCountProvider(item.videoId)).valueOrNull) {
+                  final count? => '${l10n.comments}  $count',
+                  _ => l10n.comments,
+                },
                 // A sheet, so the video keeps playing above it instead
                 // of being replaced by a page.
                 onTap: () => showCommentsSheet(context, item.videoId),
