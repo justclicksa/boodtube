@@ -1,5 +1,6 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
+
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -1223,4 +1224,7 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get videoBufferLiveNote =>
       'تستخدم البثوث المباشرة دائمًا المخزن المنخفض';
+
+  @override
+  String get seekPreview => 'معاينة موضع التشغيل';
 }

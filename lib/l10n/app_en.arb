@@ -565,5 +565,6 @@
   "hardwareDecoder": "Hardware decoder",
   "engineCodec": "Engine codec",
   "droppedFrames": "Dropped frames",
-  "videoBufferLiveNote": "Live broadcasts always use the low buffer"
+  "videoBufferLiveNote": "Live broadcasts always use the low buffer",
+  "seekPreview": "Seek preview"
 }

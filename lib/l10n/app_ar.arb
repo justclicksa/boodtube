@@ -544,5 +544,6 @@
   "hardwareDecoder": "فك الترميز بالعتاد",
   "engineCodec": "ترميز المحرك",
   "droppedFrames": "الإطارات المسقطة",
-  "videoBufferLiveNote": "تستخدم البثوث المباشرة دائمًا المخزن المنخفض"
+  "videoBufferLiveNote": "تستخدم البثوث المباشرة دائمًا المخزن المنخفض",
+  "seekPreview": "معاينة موضع التشغيل"
 }

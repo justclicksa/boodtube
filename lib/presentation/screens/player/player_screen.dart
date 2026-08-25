@@ -24,6 +24,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/utils/duration_formatter.dart';
 import '../../../data/local/preferences/settings_repository_impl.dart';
+import '../../../data/youtube/storyboard_service.dart';
 import '../../../domain/entities/chapter_item.dart';
 import '../../../domain/entities/media_item.dart';
 import '../../../domain/entities/sponsor_segment.dart';
@@ -44,6 +45,7 @@ import '../comments/comments_screen.dart';
 import 'widgets/player_settings_sheet.dart';
 import 'widgets/live_chat_sheet.dart';
 import 'widgets/cast_device_sheet.dart';
+import 'widgets/seek_preview.dart';
 
 /// How mpv gets frames onto the screen, per platform.
 ///
@@ -1228,6 +1230,21 @@ class _ScrubBarState extends ConsumerState<_ScrubBar> {
   /// when not dragging, so playback drives the thumb.
   double? _scrubMs;
 
+  /// Sheet already asked for, so one drag does not re-issue the same
+  /// prefetch on every rebuild.
+  int? _prefetchedSheet;
+
+  /// Warms the cache for the sheet holding [position] so the first
+  /// preview frame is there the moment the finger moves.
+  void _prefetchStoryboard(StoryboardSpec? spec, Duration position) {
+    final tile = spec?.tileAt(position);
+    if (tile == null || tile.sheetIndex == _prefetchedSheet) return;
+    _prefetchedSheet = tile.sheetIndex;
+    unawaited(
+      precacheImage(storyboardImageProvider(tile.sheetUrl), context),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
@@ -1242,6 +1259,13 @@ class _ScrubBarState extends ConsumerState<_ScrubBar> {
         .toDouble();
     final chapters = state.currentItem?.chapters ?? const <ChapterItem>[];
 
+    // Seek-preview thumbnails. Absent (loading, unavailable, or simply
+    // not served for this video) just means no bubble.
+    final videoId = state.currentItem?.videoId;
+    final storyboard = videoId == null || videoId.isEmpty
+        ? null
+        : ref.watch(videoStoryboardProvider(videoId)).valueOrNull;
+
     return Padding(
       padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 6),
       child: Row(
@@ -1253,6 +1277,8 @@ class _ScrubBarState extends ConsumerState<_ScrubBar> {
           Expanded(
             child: Stack(
               alignment: Alignment.center,
+              // The seek preview deliberately paints above the bar.
+              clipBehavior: Clip.none,
               children: [
                 // How much is safe to watch without waiting, and where
                 // the chapters break — both drawn under the thumb.
@@ -1287,8 +1313,12 @@ class _ScrubBarState extends ConsumerState<_ScrubBar> {
                     label: DurationFormatter.format(
                       Duration(milliseconds: value.toInt()),
                     ),
-                    onChangeStart: (_) {
+                    onChangeStart: (start) {
                       HapticFeedback.selectionClick();
+                      _prefetchStoryboard(
+                        storyboard,
+                        Duration(milliseconds: start.toInt()),
+                      );
                       widget.onInteract();
                     },
                     onChanged: (next) {
@@ -1297,11 +1327,26 @@ class _ScrubBarState extends ConsumerState<_ScrubBar> {
                     },
                     onChangeEnd: (next) {
                       controller.seek(Duration(milliseconds: next.toInt()));
+                      _prefetchedSheet = null;
                       setState(() => _scrubMs = null);
                       widget.onInteract();
                     },
                   ),
                 ),
+                // Above the thumb, and only while a drag is in flight.
+                if (_scrubMs != null)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 30,
+                    child: IgnorePointer(
+                      child: SeekPreviewBubble(
+                        spec: storyboard,
+                        position: Duration(milliseconds: value.toInt()),
+                        fraction: value / duration,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
