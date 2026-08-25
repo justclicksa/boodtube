@@ -1439,4 +1439,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String commentsCount(String count) {
     return '$count comments';
   }
+
+  @override
+  String get playerEngine => 'Video engine';
+
+  @override
+  String get playerEngineSubtitle => 'Applies the next time the app starts';
+
+  @override
+  String get playerEngineNative => 'Native (ExoPlayer)';
+
+  @override
+  String get playerEngineMpv => 'libmpv';
+
+  @override
+  String get playerEngineNativeSubtitle =>
+      'Hardware playback through the Android system player';
+
+  @override
+  String get playerEngineMpvSubtitle => 'The bundled libmpv player';
 }

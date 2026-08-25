@@ -6,6 +6,7 @@
 // in-page search filter possible.
 // ============================================================
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +16,7 @@ import '../../../data/local/preferences/settings_repository_impl.dart';
 import '../../../domain/entities/content_filter.dart';
 import '../../../domain/entities/media_format.dart';
 import '../../../domain/entities/sponsor_segment.dart';
+import '../../../domain/player/player_engine.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../services/player_tuning.dart';
 import '../../l10n/enum_labels.dart';
@@ -334,6 +336,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onTap: () => _showPlayerShortcutsPicker(settings, controller),
             ),
           ),
+          // Android is the only platform with a second backend to offer;
+          // elsewhere the choice would be between libmpv and libmpv.
+          if (defaultTargetPlatform == TargetPlatform.android)
+            _SettingsRow(
+              keywords: [
+                l10n.playerEngine,
+                l10n.playerEngineNative,
+                l10n.playerEngineMpv,
+              ],
+              widget: ListTile(
+                leading: const Icon(Icons.memory),
+                title: Text(l10n.playerEngine),
+                subtitle: Text(
+                  '${settings.playerEngine.label(l10n)} · '
+                  '${l10n.playerEngineSubtitle}',
+                ),
+                onTap: () => _showPlayerEnginePicker(settings),
+              ),
+            ),
         ],
       ),
       _SettingsSection(
@@ -829,6 +850,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         PlayerQuickAction.stats => Icons.info_outline,
         PlayerQuickAction.settings => Icons.settings,
       };
+
+  void _showPlayerEnginePicker(AppSettings settings) {
+    final l10n = AppLocalizations.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final engine in PlayerEngineKind.values)
+              RadioListTile<PlayerEngineKind>(
+                title: Text(engine.label(l10n)),
+                subtitle: Text(engine.description(l10n)),
+                value: engine,
+                groupValue: settings.playerEngine,
+                onChanged: (value) {
+                  if (value != null) {
+                    ref
+                        .read(settingsControllerProvider.notifier)
+                        .setPlayerEngine(value);
+                  }
+                  Navigator.of(context).pop();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _showClickbaitPicker(AppSettings settings) {
     final l10n = AppLocalizations.of(context);

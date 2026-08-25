@@ -12,14 +12,12 @@ import 'dart:async';
 // name in services/download_manager.dart.
 import 'package:cached_network_image/cached_network_image.dart'
     show CachedNetworkImageProvider;
-import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, visibleForTesting;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -29,6 +27,7 @@ import '../../../data/youtube/storyboard_service.dart';
 import '../../../domain/entities/chapter_item.dart';
 import '../../../domain/entities/media_item.dart';
 import '../../../domain/entities/sponsor_segment.dart';
+import '../../../domain/player/player_engine.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../services/pip_manager.dart';
 import '../../l10n/enum_labels.dart';
@@ -51,30 +50,6 @@ import 'widgets/player_settings_sheet.dart';
 import 'widgets/live_chat_sheet.dart';
 import 'widgets/cast_device_sheet.dart';
 import 'widgets/seek_preview.dart';
-
-/// How mpv gets frames onto the screen, per platform.
-///
-/// Android: mpv's default `vo=gpu` needs its own EGL context, which
-/// fails on the emulator ("Could not create EGL context for GLES 2.x").
-/// `mediacodec_embed` decodes straight onto the Android Surface — no
-/// mpv-side GL — and works on devices and emulators alike.
-///
-/// iOS/macOS: neither of those exists. VideoToolbox is the hardware
-/// decoder there, and media_kit's default video output already renders
-/// through Metal, so only the decoder is named.
-///
-/// Anything else keeps media_kit's defaults.
-VideoControllerConfiguration get _videoOutputConfiguration =>
-    switch (defaultTargetPlatform) {
-      TargetPlatform.android => const VideoControllerConfiguration(
-          vo: 'mediacodec_embed',
-          hwdec: 'mediacodec',
-        ),
-      TargetPlatform.iOS ||
-      TargetPlatform.macOS =>
-        const VideoControllerConfiguration(hwdec: 'videotoolbox'),
-      _ => const VideoControllerConfiguration(),
-    };
 
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({
@@ -100,7 +75,7 @@ class PlayerScreen extends ConsumerStatefulWidget {
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen>
     with SingleTickerProviderStateMixin {
-  late final VideoController _videoController;
+  late final PlayerEngine _engine;
   bool _showControls = true;
   Timer? _hideTimer;
   bool _descriptionExpanded = false;
@@ -131,10 +106,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   @override
   void initState() {
     super.initState();
-    _videoController = VideoController(
-      ref.read(mediaPlayerProvider),
-      configuration: _videoOutputConfiguration,
-    );
+    // Which backend is playing is decided once, at startup, so the
+    // surface can be read here and kept for the life of the screen.
+    _engine = ref.read(playerEngineProvider);
 
     _settle = AnimationController(
       vsync: this,
@@ -351,7 +325,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
     Widget player = _PlayerSurface(
       state: state,
-      videoController: _videoController,
+      engine: _engine,
       showControls: _showControls,
       onToggleControls: _toggleControls,
       onInteract: _restartHideTimer,
@@ -512,7 +486,7 @@ PlayerVerticalDragMode playerVerticalDragMode({
 class _PlayerSurface extends ConsumerStatefulWidget {
   const _PlayerSurface({
     required this.state,
-    required this.videoController,
+    required this.engine,
     required this.showControls,
     required this.onToggleControls,
     required this.onInteract,
@@ -528,7 +502,7 @@ class _PlayerSurface extends ConsumerStatefulWidget {
   });
 
   final PlayerStateData state;
-  final VideoController videoController;
+  final PlayerEngine engine;
   final bool showControls;
   final VoidCallback onToggleControls;
   final VoidCallback onInteract;
@@ -594,33 +568,17 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
   Widget _videoLayer(PlayerStateData state, SubtitleStyle subtitleStyle) {
     final aspect = state.videoAspect.ratio;
 
-    Widget video = Video(
-      controller: widget.videoController,
-      controls: null,
+    Widget video = widget.engine.buildSurface(
       // With a forced aspect the picture is deformed to fill the frame,
       // the way ExoPlayer's AspectRatioFrameLayout does. An explicitly
       // chosen fit preset still wins over that.
       fit: aspect != null && state.videoFit == VideoFit.fit
           ? BoxFit.fill
           : _fit,
-      fill: Colors.black,
-      subtitleViewConfiguration: subtitleViewConfigurationFor(
-        subtitleStyle,
-        scale: state.subtitleScale,
-        bottomPadding: state.subtitleOffset,
-        horizontalPadding: AppSpacing.lg,
-        customBackgroundOpacity: state.subtitleBackgroundOpacity,
-      ),
-      // media_kit_video defaults this to true and calls
-      // player.pause() the moment the app backgrounds. That is
-      // the right default for a widget that assumes you are
-      // watching, and it is what silently defeated background
-      // playback here: the process stayed alive and the audio
-      // session stayed active, but mpv had been paused out
-      // from under us. This app wants audio to keep going, and
-      // PlayerController drops the video track on background
-      // itself so nothing decodes off-screen.
-      pauseUponEnteringBackgroundMode: false,
+      subtitleStyle: subtitleStyle,
+      subtitleScale: state.subtitleScale,
+      subtitleOffset: state.subtitleOffset,
+      subtitleBackgroundOpacity: state.subtitleBackgroundOpacity,
     );
 
     if (aspect != null) {

@@ -628,5 +628,11 @@
   "commentPinned": "مثبّت",
   "commentByCreator": "صاحب القناة",
   "commentHeartedTooltip": "أعجب صاحب القناة بهذا التعليق",
-  "commentsCount": "{count} تعليق"
+  "commentsCount": "{count} تعليق",
+  "playerEngine": "محرك الفيديو",
+  "playerEngineSubtitle": "يسري عند تشغيل التطبيق في المرة القادمة",
+  "playerEngineNative": "الأصلي (ExoPlayer)",
+  "playerEngineMpv": "libmpv",
+  "playerEngineNativeSubtitle": "تشغيل عبر مشغل أندرويد بتسريع عتادي",
+  "playerEngineMpvSubtitle": "مشغل libmpv المرفق مع التطبيق"
 }

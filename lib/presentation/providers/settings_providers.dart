@@ -11,6 +11,7 @@ import '../../data/local/preferences/settings_repository_impl.dart';
 import '../../domain/entities/media_format.dart';
 import '../../domain/entities/content_filter.dart';
 import '../../domain/entities/sponsor_segment.dart';
+import '../../domain/player/player_engine.dart';
 import '../../services/backup_service.dart';
 import '../../services/player_tuning.dart';
 import '../screens/player/subtitle_styles.dart';
@@ -158,6 +159,14 @@ class SettingsController extends StateNotifier<AppSettings> {
     ];
     state = state.copyWith(playerQuickActions: normalized);
     await _repo.setPlayerQuickActions(normalized);
+  }
+
+  /// Which backend plays video. playerEngineProvider reads this once,
+  /// so a change lands on the next app start rather than swapping the
+  /// engine out from under a running playback.
+  Future<void> setPlayerEngine(PlayerEngineKind engine) async {
+    state = state.copyWith(playerEngine: engine);
+    await _repo.setPlayerEngine(engine);
   }
 
   Future<void> setPictureInPictureEnabled(bool enabled) async {

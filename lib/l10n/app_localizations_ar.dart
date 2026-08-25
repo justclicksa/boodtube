@@ -1457,4 +1457,23 @@ class AppLocalizationsAr extends AppLocalizations {
   String commentsCount(String count) {
     return '$count تعليق';
   }
+
+  @override
+  String get playerEngine => 'محرك الفيديو';
+
+  @override
+  String get playerEngineSubtitle => 'يسري عند تشغيل التطبيق في المرة القادمة';
+
+  @override
+  String get playerEngineNative => 'الأصلي (ExoPlayer)';
+
+  @override
+  String get playerEngineMpv => 'libmpv';
+
+  @override
+  String get playerEngineNativeSubtitle =>
+      'تشغيل عبر مشغل أندرويد بتسريع عتادي';
+
+  @override
+  String get playerEngineMpvSubtitle => 'مشغل libmpv المرفق مع التطبيق';
 }

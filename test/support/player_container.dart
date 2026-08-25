@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smarttube_poc/core/utils/result.dart';
 import 'package:smarttube_poc/domain/entities/media_item.dart';
 import 'package:smarttube_poc/domain/repositories/local_library_repository.dart';
+import 'package:smarttube_poc/data/player/mpv_engine.dart';
 import 'package:smarttube_poc/presentation/providers/player_providers.dart';
 import 'package:smarttube_poc/presentation/providers/repository_providers.dart';
 import 'package:smarttube_poc/presentation/providers/settings_providers.dart';
@@ -60,6 +61,17 @@ Future<PlayerTestHarness> playerTestHarness({
     overrides: [
       sharedPreferencesProvider.overrideWithValue(preferences),
       mediaPlayerProvider.overrideWithValue(player),
+      // The controller resolves its engine in the constructor. Left alone
+      // that is NativeEngine on Android, whose first act is a platform
+      // channel call `flutter test` has no implementation for — so the
+      // engine is pinned to mpv over the same fake player these tests
+      // already assert against.
+      playerEngineProvider.overrideWith(
+        (ref) => MpvEngine(
+          player: player,
+          proxy: ref.read(streamProxyProvider),
+        ),
+      ),
       audioHandlerProvider.overrideWithValue(handler),
       localLibraryRepositoryProvider.overrideWithValue(_UnusedLibrary()),
       historySyncProvider.overrideWithValue(_UnusedHistorySync()),

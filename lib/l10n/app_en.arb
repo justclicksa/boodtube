@@ -687,5 +687,11 @@
         "type": "String"
       }
     }
-  }
+  },
+  "playerEngine": "Video engine",
+  "playerEngineSubtitle": "Applies the next time the app starts",
+  "playerEngineNative": "Native (ExoPlayer)",
+  "playerEngineMpv": "libmpv",
+  "playerEngineNativeSubtitle": "Hardware playback through the Android system player",
+  "playerEngineMpvSubtitle": "The bundled libmpv player"
 }

@@ -14,6 +14,7 @@ import '../../../domain/entities/content_filter.dart';
 import '../../../domain/entities/media_format.dart';
 import '../../../domain/entities/sponsor_segment.dart';
 import '../../../services/player_tuning.dart';
+import '../../../domain/player/player_engine.dart';
 
 enum PlayerQuickAction {
   cast,
@@ -225,6 +226,12 @@ class AppSettings {
   /// Language captions are switched on in when a video has no remembered
   /// choice — `'app'` follows the app language, `'off'` never picks one.
   final String preferredSubtitleLanguage;
+  /// Which backend decodes video. The constructor default is libmpv
+  /// because that is the one every platform has; [SettingsRepository
+  /// .load] substitutes [defaultPlayerEngine] for an untouched install,
+  /// which is how Android ends up on ExoPlayer without this class
+  /// having to know what it is running on.
+  final PlayerEngineKind playerEngine;
 
   const AppSettings({
     this.themeMode = AppThemeMode.dark,
@@ -265,6 +272,7 @@ class AppSettings {
     ],
     this.subtitleStyle = 'defaultStyle',
     this.preferredSubtitleLanguage = 'app',
+    this.playerEngine = PlayerEngineKind.mpv,
   });
 
   AppSettings copyWith({
@@ -292,6 +300,7 @@ class AppSettings {
     List<PlayerQuickAction>? playerQuickActions,
     String? subtitleStyle,
     String? preferredSubtitleLanguage,
+    PlayerEngineKind? playerEngine,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -320,6 +329,7 @@ class AppSettings {
       subtitleStyle: subtitleStyle ?? this.subtitleStyle,
       preferredSubtitleLanguage:
           preferredSubtitleLanguage ?? this.preferredSubtitleLanguage,
+      playerEngine: playerEngine ?? this.playerEngine,
     );
   }
 }
@@ -352,6 +362,7 @@ class SettingsRepository {
   static const _keyPlayerQuickActions = 'settings.player_quick_actions';
   static const _keyBufferPreset = 'settings.buffer_preset';
   static const _keyKeepPitch = 'settings.keep_pitch';
+  static const _keyPlayerEngine = 'settings.player_engine';
   static const _keyChannelPlayback = 'settings.channel_playback';
   static const _keySubtitleStyle = 'settings.subtitle_style';
   static const _keyPreferredSubtitleLanguage =
@@ -393,6 +404,10 @@ class SettingsRepository {
       subtitleStyle: _prefs.getString(_keySubtitleStyle) ?? 'defaultStyle',
       preferredSubtitleLanguage:
           _prefs.getString(_keyPreferredSubtitleLanguage) ?? 'app',
+      playerEngine: PlayerEngineKind.values.firstWhere(
+        (engine) => engine.name == _prefs.getString(_keyPlayerEngine),
+        orElse: () => defaultPlayerEngine,
+      ),
     );
   }
 
@@ -442,6 +457,10 @@ class SettingsRepository {
 
   Future<void> setAdaptiveStreaming(bool enabled) async {
     await _prefs.setBool(_keyAdaptiveStreaming, enabled);
+  }
+
+  Future<void> setPlayerEngine(PlayerEngineKind engine) async {
+    await _prefs.setString(_keyPlayerEngine, engine.name);
   }
 
   Future<void> setSponsorBlockEnabled(bool enabled) async {

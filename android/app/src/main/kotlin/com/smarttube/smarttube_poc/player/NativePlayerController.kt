@@ -3,6 +3,7 @@ package com.smarttube.smarttube_poc.player
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Surface
 import com.google.android.exoplayer2.C
 import com.google.android.exoplayer2.DefaultLoadControl
@@ -45,6 +46,10 @@ class NativePlayerController(
     private val context: Context,
     private val events: (Map<String, Any?>) -> Unit,
 ) {
+    private companion object {
+        const val TAG = "SmartTubePlayer"
+    }
+
     private val main = Handler(Looper.getMainLooper())
 
     // A single thread, not a pool: resolutions for one player are inherently
@@ -194,7 +199,10 @@ class NativePlayerController(
             } catch (e: Throwable) {
                 main.post {
                     if (generation == openGeneration && !released) {
-                        onError("resolve_failed", e.message ?: e.javaClass.simpleName)
+                        fail(
+                            videoId, onError, "resolve_failed",
+                            "${e.javaClass.simpleName}: ${e.message}",
+                        )
                     }
                 }
                 return@execute
@@ -202,21 +210,25 @@ class NativePlayerController(
 
             main.post {
                 if (generation != openGeneration || released) return@post
-                openResolved(resolved, onError)
+                openResolved(videoId, resolved, onError)
             }
         }
     }
 
     private fun openResolved(
+        videoId: String,
         formatInfo: MediaItemFormatInfo?,
         onError: (code: String, message: String) -> Unit,
     ) {
         if (formatInfo == null) {
-            onError("resolve_failed", "No format info for this video")
+            fail(videoId, onError, "resolve_failed", "No format info for this video")
             return
         }
         if (formatInfo.isUnplayable) {
-            onError("unplayable", formatInfo.playabilityReason ?: "Video is unplayable")
+            fail(
+                videoId, onError, "unplayable",
+                formatInfo.playabilityReason ?: "Video is unplayable",
+            )
             return
         }
 
@@ -225,20 +237,51 @@ class NativePlayerController(
         val built = try {
             factory.fromFormatInfo(formatInfo, /* preferHighBitrate= */ false)
         } catch (e: Throwable) {
-            onError("source_failed", e.message ?: e.javaClass.simpleName)
+            fail(videoId, onError, "source_failed", e.message ?: e.javaClass.simpleName)
             return
         }
         if (built == null) {
             // Reached for a scheduled premiere or a stream that has not begun:
             // YouTube answers with metadata but no playable rendition at all.
-            onError("no_streams", formatInfo.playabilityReason ?: "No playable streams")
+            fail(
+                videoId, onError, "no_streams",
+                // Which gate rejected it matters: a live stream with no
+                // start time is refused the sideloaded manifests on
+                // purpose, and then has nothing left to fall back to.
+                "No playable rendition (live=${formatInfo.isLive} " +
+                    "startMs=${formatInfo.startTimeMs} " +
+                    "dash=${formatInfo.containsDashFormats()} " +
+                    "sabr=${formatInfo.containsSabrFormats()} " +
+                    "dashUrl=${formatInfo.containsDashUrl()} " +
+                    "hlsUrl=${formatInfo.containsHlsUrl()} " +
+                    "url=${formatInfo.containsUrlFormats()})",
+            )
             return
         }
 
         currentSourceKind = built.kind.wireName
+        // The single most useful line in a playback bug report: which rung
+        // of the format ladder this video actually landed on.
+        Log.i(
+            TAG,
+            "open $videoId: source=${built.kind.wireName} " +
+                "live=${formatInfo.isLive} heightCap=$preferredHeight",
+        )
         applyHeightLimit(preferredHeight)
         exo.prepare(built.mediaSource)
         exo.playWhenReady = true
+    }
+
+    /// Reports a refusal to Dart and to logcat at once: an error that only
+    /// reaches the UI is invisible in a bug report.
+    private fun fail(
+        videoId: String,
+        onError: (code: String, message: String) -> Unit,
+        code: String,
+        message: String,
+    ) {
+        Log.w(TAG, "open $videoId failed: $code: $message")
+        onError(code, message)
     }
 
     fun play() {

@@ -125,7 +125,7 @@ class _CastDeviceSheetState extends ConsumerState<_CastDeviceSheet> {
               item,
               position: player.position,
             );
-        await ref.read(playerControllerProvider.notifier).player.pause();
+        await ref.read(playerControllerProvider.notifier).engine.pause();
       }
       if (mounted) Navigator.pop(context);
     } catch (_) {

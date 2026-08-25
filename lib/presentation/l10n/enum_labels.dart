@@ -9,6 +9,7 @@
 import '../../domain/entities/content_filter.dart';
 import '../../domain/entities/media_format.dart';
 import '../../domain/entities/sponsor_segment.dart';
+import '../../domain/player/player_engine.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/player_tuning.dart';
 import '../providers/player_providers.dart';
@@ -89,6 +90,18 @@ extension LocalizedRepeatMode on RepeatMode {
         RepeatMode.all => l10n.repeatAllShort,
         RepeatMode.shuffle => l10n.repeatShuffleShort,
         RepeatMode.pause => l10n.repeatPauseShort,
+      };
+}
+
+extension LocalizedPlayerEngine on PlayerEngineKind {
+  String label(AppLocalizations l10n) => switch (this) {
+        PlayerEngineKind.native => l10n.playerEngineNative,
+        PlayerEngineKind.mpv => l10n.playerEngineMpv,
+      };
+
+  String description(AppLocalizations l10n) => switch (this) {
+        PlayerEngineKind.native => l10n.playerEngineNativeSubtitle,
+        PlayerEngineKind.mpv => l10n.playerEngineMpvSubtitle,
       };
 }
 

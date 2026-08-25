@@ -2641,6 +2641,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} comments'**
   String commentsCount(String count);
+
+  /// No description provided for @playerEngine.
+  ///
+  /// In en, this message translates to:
+  /// **'Video engine'**
+  String get playerEngine;
+
+  /// No description provided for @playerEngineSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Applies the next time the app starts'**
+  String get playerEngineSubtitle;
+
+  /// No description provided for @playerEngineNative.
+  ///
+  /// In en, this message translates to:
+  /// **'Native (ExoPlayer)'**
+  String get playerEngineNative;
+
+  /// No description provided for @playerEngineMpv.
+  ///
+  /// In en, this message translates to:
+  /// **'libmpv'**
+  String get playerEngineMpv;
+
+  /// No description provided for @playerEngineNativeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hardware playback through the Android system player'**
+  String get playerEngineNativeSubtitle;
+
+  /// No description provided for @playerEngineMpvSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The bundled libmpv player'**
+  String get playerEngineMpvSubtitle;
 }
 
 class _AppLocalizationsDelegate

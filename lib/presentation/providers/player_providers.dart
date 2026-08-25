@@ -7,12 +7,17 @@ import 'dart:math';
 import 'dart:io';
 
 import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:media_kit/media_kit.dart';
+// Only for NativePlayer, mpv's property interface, which the engine stats
+// panel reads directly — see playerEngineStatsProvider.
+import 'package:media_kit/media_kit.dart' show NativePlayer;
 
 import '../../data/youtube/mpd_builder.dart';
 import '../../data/youtube/stream_resolver.dart';
+import '../../data/player/mpv_engine.dart';
+import '../../data/player/native_engine.dart';
 import '../../data/local/preferences/settings_repository_impl.dart';
 import '../../core/errors/exceptions.dart';
 import '../../domain/entities/content_filter.dart';
@@ -20,6 +25,7 @@ import '../../core/network/stream_proxy.dart';
 import '../../domain/entities/media_item.dart';
 import '../../domain/entities/media_subtitle.dart';
 import '../../domain/entities/sponsor_segment.dart';
+import '../../domain/player/player_engine.dart';
 import '../../domain/repositories/local_library_repository.dart';
 import '../../services/audio_player_handler.dart';
 import '../../services/history_sync.dart';
@@ -284,7 +290,7 @@ class PlayerStateData {
   final String? fallbackReason;
   final int recoveryCount;
   final double networkMbps;
-  final List<ResolvedAudioTrack> audioTracks;
+  final List<EngineAudioTrack> audioTracks;
   final String? selectedAudioTrackId;
   final double subtitleScale;
   final double subtitleOffset;
@@ -348,7 +354,7 @@ class PlayerStateData {
     String? fallbackReason,
     int? recoveryCount,
     double? networkMbps,
-    List<ResolvedAudioTrack>? audioTracks,
+    List<EngineAudioTrack>? audioTracks,
     String? selectedAudioTrackId,
     double? subtitleScale,
     double? subtitleOffset,
@@ -443,7 +449,11 @@ class PlayerStateData {
 class PlayerController extends StateNotifier<PlayerStateData>
     with WidgetsBindingObserver {
   PlayerController(this._ref) : super(const PlayerStateData()) {
-    _player = _ref.read(mediaPlayerProvider);
+    _engine = _ref.read(playerEngineProvider);
+    // Bringing a backend up can be asynchronous — the native engine has
+    // to allocate a texture before anything can be opened on it — so the
+    // future is kept and every open waits on it instead of racing it.
+    _engineReady = _engine.initialize();
     WidgetsBinding.instance.addObserver(this);
     // Resolved here, not on demand: dispose() runs while the
     // ProviderContainer is already being torn down, so a _ref.read()
@@ -452,37 +462,48 @@ class PlayerController extends StateNotifier<PlayerStateData>
     _libraryRepo = _ref.read(localLibraryRepositoryProvider);
     _historySync = _ref.read(historySyncProvider);
 
-    // Surface mpv logs/errors — mpv does not write to logcat by itself,
-    // so without these listeners playback failures are invisible.
     _subscriptions
-      ..add(_player.stream.log.listen((event) {
-        debugPrint('mpv[${event.level}] ${event.prefix}: ${event.text}');
-      }))
-      ..add(_player.stream.error.listen((message) {
-        debugPrint('mpv ERROR: $message');
+      ..add(_engine.error.listen((failure) {
+        // A capped stream is a quality problem, not a playback failure:
+        // googlevideo promised more bytes than it served. The cap is
+        // quality-specific, not video-specific — probing the video that
+        // raised this (tool/client_probe.dart) showed googlevideo
+        // serving 720p in full while refusing 1080p a few MiB in. So
+        // drop a rung and keep playing rather than stopping on an error
+        // screen: dying at the top quality when a lower one would have
+        // played is the worst of the options.
+        if (failure.code == EnginePlaybackError.streamCapped) {
+          if (_stepDownAfterCap()) return;
+          state = state.copyWith(
+            error: 'stream-capped',
+            isLoading: false,
+            clearPendingHeight: true,
+          );
+          return;
+        }
         // mpv reports plenty that is not fatal — a live stream is not
         // seekable, ffmpeg grumbles when a CDN redirect moves it to
         // another host, sockets hiccup. Turning each of those into an
         // error screen made live broadcasts look broken while they were
         // in fact about to play.
-        if (_isBenignPlaybackError(message)) return;
-        unawaited(_recoverPlayback('player-error: $message'));
+        if (_isBenignPlaybackError(failure.message)) return;
+        unawaited(_recoverPlayback('player-error: ${failure.message}'));
       }))
-      ..add(_player.stream.position.listen((pos) {
+      ..add(_engine.position.listen((pos) {
         state = state.copyWith(position: pos);
         _checkSponsorSegment(pos);
         _maybePreloadNext(pos);
       }))
-      ..add(_player.stream.duration.listen((dur) {
+      ..add(_engine.duration.listen((dur) {
         state = state.copyWith(duration: dur);
       }))
-      ..add(_player.stream.buffer.listen((buf) {
+      ..add(_engine.buffer.listen((buf) {
         state = state.copyWith(
           buffered: buf,
           networkMbps: _ref.read(streamProxyProvider).transferMbps,
         );
       }))
-      ..add(_player.stream.buffering.listen((buffering) {
+      ..add(_engine.buffering.listen((buffering) {
         state = state.copyWith(isBuffering: buffering);
         _bufferRecoveryTimer?.cancel();
         if (buffering && state.currentItem?.isLive != true) {
@@ -494,7 +515,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
           });
         }
       }))
-      ..add(_player.stream.playing.listen((playing) {
+      ..add(_engine.playing.listen((playing) {
         // Frames are arriving, so whatever was reported earlier did not
         // stop playback.
         state = playing
@@ -506,11 +527,14 @@ class PlayerController extends StateNotifier<PlayerStateData>
             : state.copyWith(isPlaying: false);
         if (playing) unawaited(_claimAudioSession());
       }))
-      ..add(_player.stream.completed.listen(_onCompleted));
+      ..add(_engine.tracks.listen(_onTracks))
+      ..add(_engine.format.listen(_onFormat))
+      ..add(_engine.completed.listen(_onCompleted));
   }
 
   final Ref _ref;
-  late final Player _player;
+  late final PlayerEngine _engine;
+  late final Future<void> _engineReady;
   late final LocalLibraryRepository _libraryRepo;
   late final HistorySync _historySync;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
@@ -583,15 +607,38 @@ class PlayerController extends StateNotifier<PlayerStateData>
   /// positions reported during one playback session to it.
   String? _cpn;
 
-  Player get player => _player;
+  PlayerEngine get engine => _engine;
+
+  /// Renditions the engine discovered on the platform side. An engine
+  /// that resolves in Dart already reported the same facts through the
+  /// open result and never emits here.
+  void _onTracks(EngineTracks tracks) {
+    final heights = tracks.video.map((track) => track.height).toSet().toList()
+      ..sort((a, b) => b.compareTo(a));
+    if (heights.isNotEmpty) _lastAvailableHeights = heights;
+    state = state.copyWith(
+      availableHeights: heights,
+      audioTracks: tracks.audio,
+    );
+  }
+
+  void _onFormat(EngineFormat format) {
+    state = state.copyWith(
+      currentQualityLabel: format.label,
+      // Which manifest the bytes came out of is the closest thing the
+      // native engine has to the InnerTube client the resolver reports,
+      // and it belongs in the same row of the stats panel.
+      sourceClient: format.source,
+    );
+  }
 
   Future<void> _onCompleted(bool completed) async {
     if (!completed) return;
     final finished = state.currentItem;
     switch (state.repeatMode) {
       case RepeatMode.one:
-        await _player.seek(Duration.zero);
-        await _player.play();
+        await _engine.seek(Duration.zero);
+        await _engine.play();
       case RepeatMode.all:
       case RepeatMode.shuffle:
         await _saveCurrentPosition();
@@ -614,8 +661,8 @@ class PlayerController extends StateNotifier<PlayerStateData>
         }
         // Nothing else is queued, so looping means this one video again.
         if (finished != null) {
-          await _player.seek(Duration.zero);
-          await _player.play();
+          await _engine.seek(Duration.zero);
+          await _engine.play();
           return;
         }
         await _offerRelated();
@@ -634,6 +681,10 @@ class PlayerController extends StateNotifier<PlayerStateData>
   /// Plays a previously downloaded copy straight from disk. Returns false
   /// — so the caller streams instead — when there is no usable copy.
   Future<bool> loadOffline(String videoId) async {
+    // A downloaded copy is a pair of files on disk, and an engine that
+    // resolves on the platform side has no way to be pointed at them.
+    // Falling through to streaming is what a deleted file already does.
+    if (_engine.resolvesStreamsNatively) return false;
     final db = _ref.read(appDatabaseProvider);
     final row = await db.getDownload(videoId);
     if (row == null) return false;
@@ -680,14 +731,16 @@ class PlayerController extends StateNotifier<PlayerStateData>
     );
 
     try {
-      await _player.open(Media(Uri.file(row.videoPath).toString()));
       final audioPath = row.audioPath;
-      if (audioPath != null && File(audioPath).existsSync()) {
-        await _player.setAudioTrack(
-          AudioTrack.uri(Uri.file(audioPath).toString()),
-        );
-      }
-      await _player.setRate(state.playbackSpeed);
+      await _engine.openDirect(
+        url: Uri.file(row.videoPath).toString(),
+        // A download that kept video and audio apart is handed over as two
+        // files; both engines merge them locally.
+        audioUrl: audioPath != null && File(audioPath).existsSync()
+            ? Uri.file(audioPath).toString()
+            : null,
+      );
+      await _engine.setSpeed(state.playbackSpeed);
       state = state.copyWith(
         isLoading: false,
         clearError: true,
@@ -705,7 +758,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
       final posResult = await _libraryRepo.getPlayPosition(videoId);
       final saved = posResult.dataOrNull;
       if (saved != null && saved > Duration.zero) {
-        await _player.seek(saved);
+        await _engine.seek(saved);
       }
       _savePositionTimer = Timer.periodic(
         const Duration(seconds: 10),
@@ -734,7 +787,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
     _savePositionTimer?.cancel();
     _savePositionTimer = null;
     try {
-      await _player.stop();
+      await _engine.stop();
     } catch (_) {}
     state = state.copyWith(
       isPlaying: false,
@@ -787,6 +840,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
     _preloadedFor = null;
 
     try {
+      await _engineReady;
       final sw = Stopwatch()..start();
       // Prefetched during the tail of the previous video, so the usual
       // couple of seconds of metadata round-trip is already paid for.
@@ -850,6 +904,9 @@ class PlayerController extends StateNotifier<PlayerStateData>
         rotationDegrees: 0,
         flipHorizontal: false,
       );
+      // The engine re-applies the rate itself after every open, so it
+      // has to be told before the stream is opened rather than after.
+      await _engine.setSpeed(rememberedSpeed);
 
       // A live broadcast is a rolling HLS playlist, not a file that can
       // be walked by byte range, so it takes a different path entirely.
@@ -872,13 +929,19 @@ class PlayerController extends StateNotifier<PlayerStateData>
       }
 
       final resolved = await retryPlaybackOperation(
-        () => _openStreams(
+        () => _openForPlayback(
           videoId,
-          exactHeight: channelPreferences?.qualityHeight ?? _autoHeight(),
+          preferredHeight: channelPreferences?.qualityHeight ?? _autoHeight(),
           audioTrackId: channelPreferences?.audioTrackId,
+          subtitleCode: channelPreferences?.subtitleCode,
         ),
         shouldRetry: isRetryablePlaybackError,
       );
+      // Kept across videos as the best guess for what the next one will
+      // offer; an engine that reports rungs as events sets it there.
+      if (resolved.availableHeights.isNotEmpty) {
+        _lastAvailableHeights = resolved.availableHeights;
+      }
 
       state = state.copyWith(
         currentItem: item,
@@ -929,7 +992,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
       final posResult = await libraryRepo.getPlayPosition(videoId);
       final saved = posResult.dataOrNull;
       if (saved != null && saved > Duration.zero) {
-        await _player.seek(saved);
+        await _engine.seek(saved);
       }
 
       _savePositionTimer?.cancel();
@@ -950,17 +1013,119 @@ class PlayerController extends StateNotifier<PlayerStateData>
   /// rolling playlist has no equivalent of, and ffmpeg handles the
   /// playlist and its segments itself.
   Future<bool> _openLiveStream(String videoId) async {
+    // A platform-side engine finds the playlist for itself; live is not
+    // a special case there, only here.
+    if (_engine.resolvesStreamsNatively) {
+      await _engine.openVideo(videoId);
+      return true;
+    }
     final url =
         await _ref.read(authenticatedClientProvider).getLiveStreamUrl(videoId);
     if (url == null) return false;
     debugPrint('openLive[$videoId]: opening HLS playlist');
-    await _player.open(Media(url));
-    await _player.setRate(1);
+    await _engine.openDirect(url: url);
+    await _engine.setSpeed(1);
     // A rolling playlist gets the low buffer whatever the preference
     // says; see effectiveBufferPreset().
     await applyEngineTuning(isLive: true);
     return true;
   }
+
+  /// Opens [videoId] on whichever engine is running.
+  ///
+  /// The two arrive at a playable stream by genuinely different routes,
+  /// and this is the one place that has to know it. An engine that
+  /// resolves natively is handed the id and reports what it found back
+  /// through its track and format streams; mpv is fed by the Dart
+  /// pipeline below — resolver, 403 probing, the sideloaded MPD and the
+  /// loopback relay — which is also where the cap/step-down recovery
+  /// lives, so it stays in the controller rather than moving into the
+  /// engine and taking half of [_recoverPlayback] with it.
+  Future<EngineOpenResult> _openForPlayback(
+    String videoId, {
+    int? preferredHeight,
+    String? audioTrackId,
+    String? subtitleCode,
+  }) async {
+    if (_engine.resolvesStreamsNatively) {
+      return _engine.openVideo(
+        videoId,
+        preferredHeight: preferredHeight,
+        audioTrackId: audioTrackId,
+        subtitleCode: subtitleCode,
+      );
+    }
+    final resolved = await _openStreams(
+      videoId,
+      exactHeight: preferredHeight,
+      audioTrackId: audioTrackId,
+    );
+    return _asOpenResult(resolved);
+  }
+
+  /// Switching quality, on whichever engine.
+  ///
+  /// The two are not the same operation at all. The native engine already
+  /// holds a manifest describing every rendition, so this is a track
+  /// selection that takes effect on the next segment. mpv holds one
+  /// signed URL for one rendition, so the only way to change height is to
+  /// resolve again and reopen — which is why the playhead is saved and
+  /// restored around it by the caller.
+  Future<EngineOpenResult?> _selectHeightForPlayback(int? height) async {
+    if (_engine.resolvesStreamsNatively) {
+      return _engine.selectVideoTrack(height: height);
+    }
+    final videoId = state.currentItem?.videoId;
+    if (videoId == null) return null;
+    return _asOpenResult(
+      await _openStreams(
+        videoId,
+        exactHeight: height,
+        audioTrackId: state.selectedAudioTrackId,
+      ),
+    );
+  }
+
+  /// Same split as [_selectHeightForPlayback]: a dubbed audio track is
+  /// another rendition in the native engine's manifest, and another
+  /// resolve for mpv.
+  Future<EngineOpenResult?> _selectAudioForPlayback(String trackId) async {
+    if (_engine.resolvesStreamsNatively) {
+      return _engine.selectAudioTrack(trackId);
+    }
+    final videoId = state.currentItem?.videoId;
+    if (videoId == null) return null;
+    return _asOpenResult(
+      await _openStreams(
+        videoId,
+        exactHeight: state.pendingHeight ?? _autoHeight(),
+        audioTrackId: trackId,
+      ),
+    );
+  }
+
+  /// Restates what the Dart resolver found in the engine-neutral shape,
+  /// so the state update after an open reads the same either way.
+  EngineOpenResult _asOpenResult(ResolvedStream resolved) => EngineOpenResult(
+        videoUrl: resolved.videoUrl,
+        audioUrl: resolved.audioUrl,
+        qualityLabel: resolved.qualityLabel,
+        videoHeight: resolved.videoHeight,
+        availableHeights: resolved.availableHeights,
+        sourceClient: resolved.sourceClient,
+        failedClients: resolved.failedClients,
+        audioTracks: [
+          for (final track in resolved.audioTracks)
+            EngineAudioTrack(
+              id: track.id,
+              label: track.label,
+              bitrate: track.bitrate,
+              url: track.url,
+              isDefault: track.isDefault,
+            ),
+        ],
+        selectedAudioTrackId: resolved.selectedAudioTrackId,
+      );
 
   /// Resolves the streams for [videoId] and hands them to mpv. Shared by
   /// first play and by quality switching, which must not pay for the
@@ -1044,19 +1209,16 @@ class PlayerController extends StateNotifier<PlayerStateData>
 
     if (mpdUrl != null) {
       debugPrint('openStreams: opening DASH manifest');
-      await _player.open(Media(mpdUrl));
-      await _player.setRate(state.playbackSpeed);
+      await _engine.openDirect(url: mpdUrl);
+      await _engine.setSpeed(state.playbackSpeed);
       return resolved;
     }
 
-    await _player.open(Media(localVideoUrl));
+    await _engine.openDirect(url: localVideoUrl, audioUrl: localAudioUrl);
     // mpv resets audio-delay and the demuxer limits per file, so the
     // tweaks are re-asserted on every open rather than only at startup.
     await applyEngineTuning(isLive: false);
-    await _player.setRate(state.playbackSpeed);
-    if (localAudioUrl != null) {
-      await _player.setAudioTrack(AudioTrack.uri(localAudioUrl));
-    }
+    await _engine.setSpeed(state.playbackSpeed);
     return resolved;
   }
 
@@ -1144,13 +1306,13 @@ class PlayerController extends StateNotifier<PlayerStateData>
     try {
       for (final height in candidates) {
         try {
-          final resolved = await _openStreams(
+          final resolved = await _engine.openVideo(
             item.videoId,
-            exactHeight: height,
+            preferredHeight: height,
             audioTrackId: state.selectedAudioTrackId,
           );
-          if (resumeFrom > Duration.zero) await _player.seek(resumeFrom);
-          if (wasPlaying) await _player.play();
+          if (resumeFrom > Duration.zero) await _engine.seek(resumeFrom);
+          if (wasPlaying) await _engine.play();
           state = state.copyWith(
             isLoading: false,
             clearError: true,
@@ -1254,16 +1416,20 @@ class PlayerController extends StateNotifier<PlayerStateData>
     );
 
     try {
-      final resolved = await _openStreams(
-        item.videoId,
-        exactHeight: height,
-        audioTrackId: state.selectedAudioTrackId,
-      );
-      if (resumeFrom > Duration.zero) await _player.seek(resumeFrom);
+      final resolved = await _selectHeightForPlayback(height);
+      if (resolved == null) {
+        // Switched in place on the platform side: nothing was re-opened,
+        // the playhead never moved, and the rung that took effect
+        // arrives as a format event.
+        state = state.copyWith(isLoading: false, clearPendingHeight: true);
+        unawaited(_rememberChannel(qualityHeight: height));
+        return;
+      }
+      if (resumeFrom > Duration.zero) await _engine.seek(resumeFrom);
       if (wasPlaying) {
-        await _player.play();
+        await _engine.play();
       } else {
-        await _player.pause();
+        await _engine.pause();
       }
       state = state.copyWith(
         isLoading: false,
@@ -1329,14 +1495,14 @@ class PlayerController extends StateNotifier<PlayerStateData>
 
   void togglePlayPause() {
     if (state.isPlaying) {
-      _player.pause();
+      _engine.pause();
     } else {
-      _player.play();
+      _engine.play();
     }
   }
 
   void seek(Duration position) {
-    _player.seek(position);
+    _engine.seek(position);
     state = state.copyWith(position: position);
   }
 
@@ -1383,7 +1549,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
   /// menu).
   Future<void> setVolume(double percent) async {
     final clamped = percent.clamp(0.0, 300.0);
-    await _player.setVolume(clamped);
+    await _engine.setVolume(clamped);
     state = state.copyWith(volume: clamped);
   }
 
@@ -1630,8 +1796,8 @@ class PlayerController extends StateNotifier<PlayerStateData>
   Future<void> replay() async {
     _cancelUpNextTimer();
     state = state.copyWith(clearUpNext: true, showReplay: false);
-    await _player.seek(Duration.zero);
-    await _player.play();
+    await _engine.seek(Duration.zero);
+    await _engine.play();
   }
 
   // ============================================================
@@ -1712,9 +1878,9 @@ class PlayerController extends StateNotifier<PlayerStateData>
   /// barely anything has played.
   Future<void> skipPrevious() async {
     if (!previousGoesBack(state.position, _history.isNotEmpty)) {
-      await _player.seek(Duration.zero);
+      await _engine.seek(Duration.zero);
       state = state.copyWith(position: Duration.zero, showReplay: false);
-      await _player.play();
+      await _engine.play();
       return;
     }
     final previous = _history.removeLast();
@@ -1771,7 +1937,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
   }
 
   void setSpeed(double speed) {
-    _player.setRate(speed);
+    _engine.setSpeed(speed);
     state = state.copyWith(playbackSpeed: speed);
     unawaited(_rememberChannel(speed: speed));
   }
@@ -1781,34 +1947,18 @@ class PlayerController extends StateNotifier<PlayerStateData>
   // ============================================================
 
   /// Pushes the buffer preset, the audio delay and the pitch mode onto
-  /// mpv. Safe to call at any time; a no-op when the platform player is
-  /// not the native one (tests, web).
+  /// whichever engine is playing. What each one does with them differs —
+  /// mpv sets properties, ExoPlayer sizes its LoadControl — so the
+  /// translation lives behind [PlayerEngine.applyTuning] rather than
+  /// here. Safe to call at any time.
   Future<void> applyEngineTuning({bool? isLive}) async {
-    final platform = _player.platform;
-    if (platform is! NativePlayer) return;
     final settings = _ref.read(settingsControllerProvider);
-    final properties = playerTuningProperties(
+    await _engine.applyTuning(
       preset: settings.bufferPreset,
       audioDelayMs: state.audioDelayMs,
       keepPitch: settings.keepPitch,
       isLive: isLive ?? state.currentItem?.isLive ?? false,
-      totalRamBytes: await readDeviceRamBytes(),
     );
-    for (final entry in properties.entries) {
-      await _setEngineProperty(entry.key, entry.value);
-    }
-  }
-
-  /// One property, never fatal: an mpv build without a given option
-  /// should cost the user that tweak, not the video.
-  Future<void> _setEngineProperty(String name, String value) async {
-    final platform = _player.platform;
-    if (platform is! NativePlayer) return;
-    try {
-      await platform.setProperty(name, value);
-    } catch (e) {
-      debugPrint('player tuning: $name=$value rejected ($e)');
-    }
   }
 
   /// Chooses how far ahead the player buffers. Persisted globally and
@@ -1825,7 +1975,10 @@ class PlayerController extends StateNotifier<PlayerStateData>
   Future<void> setAudioDelay(int milliseconds) async {
     final normalized = normalizeAudioDelayMs(milliseconds);
     state = state.copyWith(audioDelayMs: normalized);
-    await _setEngineProperty('audio-delay', audioDelayProperty(normalized));
+    // Re-pushes the whole tuning set rather than the one property: only
+    // the engine knows how to express it, and mpv is no longer the only
+    // one listening.
+    await applyEngineTuning();
     await _rememberChannel(audioDelayMs: normalized);
   }
 
@@ -1835,10 +1988,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
     await _ref
         .read(settingsControllerProvider.notifier)
         .setKeepPitch(keepPitch);
-    await _setEngineProperty(
-      'audio-pitch-correction',
-      pitchCorrectionProperty(keepPitch: keepPitch),
-    );
+    await applyEngineTuning();
   }
 
   void setRepeatMode(RepeatMode mode) {
@@ -1860,18 +2010,18 @@ class PlayerController extends StateNotifier<PlayerStateData>
     bool remember = true,
   }) async {
     if (subtitle == null) {
-      await _player.setSubtitleTrack(SubtitleTrack.no());
+      await _engine.selectSubtitle(null);
       state = state.copyWith(clearSubtitle: true);
       if (remember) await _rememberChannel(clearSubtitle: true);
       return;
     }
-    // Route captions through the proxy too: the same TLS limitation
-    // applies to timedtext URLs.
-    final proxy = _ref.read(streamProxyProvider);
-    await proxy.start();
-    final local = proxy.register(Uri.parse(subtitle.url));
-    await _player.setSubtitleTrack(
-      SubtitleTrack.uri(local, title: subtitle.name, language: subtitle.code),
+    // The URL travels with the code because an engine that sideloads
+    // captions needs it; one that picks the track out of its own
+    // manifest ignores everything but the code.
+    await _engine.selectSubtitle(
+      subtitle.code,
+      url: subtitle.url,
+      label: subtitle.name,
     );
     state = state.copyWith(selectedSubtitle: subtitle);
     if (remember) await _rememberChannel(subtitleCode: subtitle.code);
@@ -1889,7 +2039,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
     );
   }
 
-  Future<void> selectAudioTrack(ResolvedAudioTrack track) async {
+  Future<void> selectAudioTrack(EngineAudioTrack track) async {
     final item = state.currentItem;
     if (state.isOffline || item == null || _switchingQuality) return;
     _switchingQuality = true;
@@ -1897,13 +2047,19 @@ class PlayerController extends StateNotifier<PlayerStateData>
     final wasPlaying = state.isPlaying;
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final resolved = await _openStreams(
-        item.videoId,
-        exactHeight: _currentHeight(),
-        audioTrackId: track.id,
-      );
-      if (resumeFrom > Duration.zero) await _player.seek(resumeFrom);
-      if (wasPlaying) await _player.play();
+      final resolved = await _selectAudioForPlayback(track.id);
+      if (resolved == null) {
+        // Switched in place: the platform kept the playhead and the
+        // video track exactly where they were.
+        state = state.copyWith(
+          isLoading: false,
+          selectedAudioTrackId: track.id,
+        );
+        await _rememberChannel(audioTrackId: track.id);
+        return;
+      }
+      if (resumeFrom > Duration.zero) await _engine.seek(resumeFrom);
+      if (wasPlaying) await _engine.play();
       state = state.copyWith(
         isLoading: false,
         currentVideoUrl: resolved.videoUrl,
@@ -1990,7 +2146,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
       return;
     }
     _sleepTimer = Timer(duration, () {
-      _player.pause();
+      _engine.pause();
       state = state.copyWith(clearSleepTimer: true);
     });
     state = state.copyWith(sleepTimerEnd: DateTime.now().add(duration));
@@ -2137,7 +2293,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
   /// Stops playback and persists progress.
   Future<void> stop() async {
     await _saveCurrentPosition();
-    await _player.stop();
+    await _engine.stop();
     state = const PlayerStateData();
   }
 
@@ -2184,16 +2340,16 @@ class PlayerController extends StateNotifier<PlayerStateData>
         if (!_ref.read(settingsControllerProvider).backgroundPlayback) {
           // Same as the official app with background play off: stop at
           // the door, resume where it left off when the user comes back.
-          if (state.isPlaying) unawaited(_player.pause());
+          if (state.isPlaying) unawaited(_engine.pause());
           return;
         }
         if (_videoSuspended) return;
         _videoSuspended = true;
-        unawaited(_player.setVideoTrack(VideoTrack.no()));
+        unawaited(_engine.setVideoTrackEnabled(false));
       case AppLifecycleState.resumed:
         if (!_videoSuspended) return;
         _videoSuspended = false;
-        unawaited(_player.setVideoTrack(VideoTrack.auto()));
+        unawaited(_engine.setVideoTrackEnabled(true));
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
         break;
@@ -2220,6 +2376,32 @@ class PlayerController extends StateNotifier<PlayerStateData>
     }
     super.dispose();
   }
+}
+
+/// The backend the settings ask for.
+///
+/// The setting is read once, deliberately: [PlayerController] holds on
+/// to whatever it is handed, and swapping the backend out from under a
+/// running playback is not something either engine expects. A change
+/// therefore takes effect the next time the app starts.
+final playerEngineProvider = Provider<PlayerEngine>((ref) {
+  final engine = _buildPlayerEngine(ref);
+  ref.onDispose(engine.dispose);
+  return engine;
+});
+
+PlayerEngine _buildPlayerEngine(Ref ref) {
+  // The native engine only exists on Android; a stale preference carried
+  // over in a backup must not leave another platform with no player.
+  if (ref.read(settingsControllerProvider).playerEngine ==
+          PlayerEngineKind.native &&
+      defaultTargetPlatform == TargetPlatform.android) {
+    return NativeEngine();
+  }
+  return MpvEngine(
+    player: ref.read(mediaPlayerProvider),
+    proxy: ref.read(streamProxyProvider),
+  );
 }
 
 /// Kept alive across screens so audio continues in the background; the
