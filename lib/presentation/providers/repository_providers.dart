@@ -28,6 +28,7 @@ import 'package:smarttube_poc/domain/repositories/local_library_repository.dart'
 import 'package:smarttube_poc/presentation/providers/auth_providers.dart';
 import 'package:smarttube_poc/services/history_sync.dart';
 import 'package:smarttube_poc/services/cast_service.dart';
+import 'package:smarttube_poc/presentation/providers/settings_providers.dart';
 
 // ============================================================
 // Infrastructure providers
@@ -153,6 +154,11 @@ final mediaItemRepositoryProvider = Provider<MediaItemRepository>((ref) {
   return MediaItemRepositoryImpl(
     ref.watch(innerTubeClientProvider),
     ref.watch(streamResolverProvider),
+    ref.watch(sponsorBlockServiceProvider),
+    // Read, not watched: the categories are resolved per request, so a
+    // settings change lands on the next video without tearing down the
+    // repository (and everything holding it) mid-playback.
+    () => ref.read(settingsControllerProvider).sponsorFetchCategories,
   );
 });
 

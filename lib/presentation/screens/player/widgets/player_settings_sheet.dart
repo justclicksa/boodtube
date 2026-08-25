@@ -633,27 +633,82 @@ class _SponsorBlockMenu extends ConsumerWidget {
           value: settings.sponsorBlockEnabled,
           onChanged: notifier.setSponsorBlockEnabled,
         ),
-        SwitchListTile(
-          title: Text(l10n.skipAutomatically),
-          subtitle: Text(
-            l10n.skipAutomaticallySubtitle,
-            style: theme.textTheme.bodySmall,
-          ),
-          value: settings.autoSkipSponsors,
-          onChanged: settings.sponsorBlockEnabled
-              ? notifier.setAutoSkipSponsors
-              : null,
-        ),
         const Divider(),
-        for (final category in SponsorCategory.values)
-          CheckboxListTile(
-            title: Text(category.label(l10n)),
-            value: settings.sponsorCategories.contains(category),
-            onChanged: settings.sponsorBlockEnabled
-                ? (v) => notifier.toggleSponsorCategory(category, v ?? false)
-                : null,
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(
+            20,
+            AppSpacing.sm,
+            20,
+            AppSpacing.xs,
+          ),
+          child: Text(
+            l10n.sponsorCategoryActions,
+            style: theme.textTheme.labelMedium,
+          ),
+        ),
+        // One action per category — SmartTube's skip / notify / ignore
+        // rather than a single global auto-skip switch.
+        for (final category in SponsorCategoryX.actionable)
+          _SegmentActionRow(
+            category: category,
+            action: settings.actionFor(category),
+            enabled: settings.sponsorBlockEnabled,
+            onChanged: (action) =>
+                notifier.setSponsorAction(category, action),
           ),
       ],
+    );
+  }
+}
+
+/// A category and the action taken when the playhead enters it.
+class _SegmentActionRow extends StatelessWidget {
+  const _SegmentActionRow({
+    required this.category,
+    required this.action,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final SponsorCategory category;
+  final SegmentAction action;
+  final bool enabled;
+  final ValueChanged<SegmentAction> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return ListTile(
+      minTileHeight: AppSpacing.minTapTarget,
+      enabled: enabled,
+      leading: Container(
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          color: Color(category.colorValue)
+              .withValues(alpha: enabled ? 1 : 0.4),
+          shape: BoxShape.circle,
+        ),
+      ),
+      title: Text(category.label(l10n)),
+      trailing: DropdownButton<SegmentAction>(
+        value: action,
+        underline: const SizedBox.shrink(),
+        style: theme.textTheme.bodyMedium,
+        onChanged: enabled
+            ? (next) {
+                if (next != null) onChanged(next);
+              }
+            : null,
+        items: [
+          for (final option in SegmentAction.values)
+            DropdownMenuItem(
+              value: option,
+              child: Text(option.label(l10n)),
+            ),
+        ],
+      ),
     );
   }
 }

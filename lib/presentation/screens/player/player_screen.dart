@@ -858,6 +858,18 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
                 ),
               ),
 
+            // SponsorBlock notices: the paid-promotion warning, the
+            // jump-to-highlight chip and the undoable skip toast. Bottom
+            // start, so none of them lands under the skip button.
+            PositionedDirectional(
+              start: 12,
+              bottom: 64,
+              child: _SponsorNotices(
+                state: state,
+                showControls: widget.showControls,
+              ),
+            ),
+
             if (state.error == null)
               // Fading rather than snapping: the controls appearing and
               // vanishing between frames is what made every tap feel
@@ -1383,6 +1395,11 @@ class _ScrubBarState extends ConsumerState<_ScrubBar> {
         .clamp(0, duration)
         .toDouble();
     final chapters = state.currentItem?.chapters ?? const <ChapterItem>[];
+    // Marker colours follow the master switch, not the per-category
+    // action: a category set to "do nothing" is still worth seeing.
+    final sponsorBlockEnabled = ref.watch(
+      settingsControllerProvider.select((s) => s.sponsorBlockEnabled),
+    );
 
     // Seek-preview thumbnails. Absent (loading, unavailable, or simply
     // not served for this video) just means no bubble.
@@ -1415,6 +1432,9 @@ class _ScrubBarState extends ConsumerState<_ScrubBar> {
                         chapters: chapters,
                         duration: state.duration,
                         buffered: state.buffered,
+                        segments: sponsorBlockEnabled
+                            ? state.sponsorSegments
+                            : const [],
                       ),
                     ),
                   ),
@@ -1542,11 +1562,16 @@ class _TrackPainter extends CustomPainter {
     required this.chapters,
     required this.duration,
     required this.buffered,
+    this.segments = const [],
   });
 
   final List<ChapterItem> chapters;
   final Duration duration;
   final Duration buffered;
+
+  /// SponsorBlock segments, drawn in their own category colours the way
+  /// the browser extension and SmartTube's seek bar do.
+  final List<SponsorSegment> segments;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1572,6 +1597,28 @@ class _TrackPainter extends CustomPainter {
       );
     }
 
+    // SponsorBlock segments, under the chapter ticks so a boundary
+    // inside a segment stays readable. A highlight is a single instant,
+    // so it gets a minimum width instead of nothing at all.
+    for (final segment in segments) {
+      if (segment.category == SponsorCategory.exclusiveAccess) continue;
+      final startMs = segment.start.inMilliseconds.clamp(0, total);
+      final endMs = segment.end.inMilliseconds.clamp(0, total);
+      if (endMs < startMs) continue;
+      final left = size.width * (startMs / total);
+      final width =
+          (size.width * (endMs - startMs) / total).clamp(2.0, size.width);
+      canvas.drawRect(
+        Rect.fromLTWH(
+          left.clamp(0.0, size.width - width),
+          top,
+          width,
+          trackHeight,
+        ),
+        Paint()..color = Color(segment.category.colorValue),
+      );
+    }
+
     // Chapter boundaries. Ticks scale with the video: 0.4% of the
     // width, floor 2px.
     final markPaint = Paint()..color = Colors.black87;
@@ -1591,7 +1638,8 @@ class _TrackPainter extends CustomPainter {
   bool shouldRepaint(_TrackPainter oldDelegate) =>
       oldDelegate.chapters != chapters ||
       oldDelegate.duration != duration ||
-      oldDelegate.buffered != buffered;
+      oldDelegate.buffered != buffered ||
+      oldDelegate.segments != segments;
 }
 
 class _RoundControl extends StatelessWidget {
@@ -1629,6 +1677,15 @@ class _SponsorSkipButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Color(segment.category.colorValue),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
               const Icon(Icons.skip_next, color: Colors.white, size: 18),
               const SizedBox(width: 6),
               Text(
@@ -1638,6 +1695,164 @@ class _SponsorSkipButton extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The transient SponsorBlock overlays. Grouped in one column so the
+/// player stack only grows by a single child.
+class _SponsorNotices extends ConsumerWidget {
+  const _SponsorNotices({required this.state, required this.showControls});
+
+  final PlayerStateData state;
+  final bool showControls;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final enabled = ref.watch(
+      settingsControllerProvider.select((s) => s.sponsorBlockEnabled),
+    );
+    if (!enabled) return const SizedBox.shrink();
+
+    final controller = ref.read(playerControllerProvider.notifier);
+    final highlight = state.highlightSegment;
+    // Offered only while it is still ahead, and only alongside the
+    // controls — an always-on chip over the picture is clutter.
+    final showHighlight = highlight != null &&
+        showControls &&
+        state.position < highlight.start;
+
+    final children = <Widget>[
+      if (state.showPaidPromotionNotice)
+        _SponsorPill(
+          key: const ValueKey('sponsor-paid-promotion'),
+          icon: Icons.campaign_outlined,
+          label: AppLocalizations.of(context).paidPromotionNotice,
+          color: Color(SponsorCategory.exclusiveAccess.colorValue),
+          onTap: controller.dismissPaidPromotionNotice,
+        ),
+      if (showHighlight)
+        _SponsorPill(
+          key: const ValueKey('sponsor-highlight-chip'),
+          icon: Icons.auto_awesome,
+          label: AppLocalizations.of(context).jumpToHighlight,
+          color: Color(SponsorCategory.highlight.colorValue),
+          onTap: controller.jumpToHighlight,
+        ),
+      if (state.sponsorNotice != null)
+        _SponsorToast(
+          key: const ValueKey('sponsor-skip-toast'),
+          segment: state.sponsorNotice!.segment,
+          onUndo: controller.undoSponsorSkip,
+        ),
+    ];
+
+    if (children.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final child in children)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: child,
+          ),
+      ],
+    );
+  }
+}
+
+/// "Skipped sponsor · Undo". Undo goes back to where the segment
+/// started and stops that segment being skipped again in this video.
+class _SponsorToast extends StatelessWidget {
+  const _SponsorToast({required this.segment, required this.onUndo, super.key});
+
+  final SponsorSegment segment;
+  final VoidCallback onUndo;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Material(
+      color: Colors.black87,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.fromSTEB(12, 4, 4, 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: Color(segment.category.colorValue),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              l10n.sponsorSkipped(segment.category.label(l10n)),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+            ),
+            const SizedBox(width: 4),
+            TextButton(
+              onPressed: onUndo,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, AppSpacing.minTapTarget),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              child: Text(
+                l10n.undo,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A small tappable pill in a SponsorBlock category colour.
+class _SponsorPill extends StatelessWidget {
+  const _SponsorPill({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black87,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white, fontSize: 12),
               ),
             ],
           ),

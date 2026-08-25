@@ -22,13 +22,20 @@ class MediaItemRepositoryImpl implements MediaItemRepository {
   final StreamResolver? _streamResolver;
   final SponsorBlockService _sponsorBlockService;
 
+  /// Resolves the categories to ask SponsorBlock for at call time, so a
+  /// settings change takes effect on the next video without rebuilding
+  /// the repository. Null falls back to the parameter defaults.
+  final Set<SponsorCategory> Function()? _sponsorCategories;
+
   MediaItemRepositoryImpl(
     this._client, [
     StreamResolver? streamResolver,
     SponsorBlockService? sponsorBlockService,
+    Set<SponsorCategory> Function()? sponsorCategories,
   ])  : _streamResolver = streamResolver,
         _sponsorBlockService =
-            sponsorBlockService ?? SponsorBlockService.create();
+            sponsorBlockService ?? SponsorBlockService.create(),
+        _sponsorCategories = sponsorCategories;
 
   @override
   Future<Result<domain.MediaItem>> getMediaItem(String videoId) async {
@@ -56,7 +63,10 @@ class MediaItemRepositoryImpl implements MediaItemRepository {
           // entire video load over a caption track.
           .catchError((_) => <MediaSubtitle>[]);
       final channelFuture = _channelDetails(mediaItem);
-      final sponsorFuture = getSponsorSegments(videoId);
+      final categories = _sponsorCategories?.call();
+      final sponsorFuture = categories == null
+          ? getSponsorSegments(videoId)
+          : getSponsorSegments(videoId, categories: categories);
 
       final subtitles = await subtitlesFuture;
       final channel = await channelFuture;
@@ -108,6 +118,8 @@ class MediaItemRepositoryImpl implements MediaItemRepository {
       SponsorCategory.sponsor,
       SponsorCategory.intro,
       SponsorCategory.outro,
+      SponsorCategory.highlight,
+      SponsorCategory.exclusiveAccess,
     },
   }) async {
     try {

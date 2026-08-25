@@ -109,6 +109,44 @@ bool isRetryablePlaybackError(Object error) {
   return !permanent.any(message.contains);
 }
 
+/// The segment under [position] that playback should act on, together
+/// with the action configured for its category — or null when there is
+/// nothing to do there.
+///
+/// Pure so the resolution can be tested without a running player.
+/// Segments that cannot be skipped (a highlight is a single instant,
+/// exclusive access covers the whole video), categories set to
+/// [SegmentAction.none], and segments the user undid a skip on
+/// ([doNotSkip]) are all passed over.
+({SponsorSegment segment, SegmentAction action})? resolveSponsorSegmentAt({
+  required List<SponsorSegment> segments,
+  required Duration position,
+  required SegmentAction Function(SponsorCategory) actionFor,
+  Set<String> doNotSkip = const {},
+}) {
+  for (final segment in segments) {
+    if (!segment.category.isSkippable) continue;
+    if (!segment.isActiveAt(position)) continue;
+    if (doNotSkip.contains(segment.key)) continue;
+    final action = actionFor(segment.category);
+    if (action == SegmentAction.none) continue;
+    return (segment: segment, action: action);
+  }
+  return null;
+}
+
+/// A segment that was just skipped, offered back to the user.
+///
+/// [id] separates two notices for the same segment (a re-watch after an
+/// undo), so the toast restarts its timer instead of being treated as
+/// the one already on screen.
+class SponsorSkipNotice {
+  const SponsorSkipNotice({required this.segment, required this.id});
+
+  final SponsorSegment segment;
+  final int id;
+}
+
 class PlayerStateData {
   const PlayerStateData({
     this.currentItem,
@@ -127,6 +165,9 @@ class PlayerStateData {
     this.sponsorSegments = const [],
     this.upcomingSegment,
     this.showSponsorSkipButton = false,
+    this.sponsorNotice,
+    this.doNotSkipSegments = const {},
+    this.showPaidPromotionNotice = false,
     this.repeatMode = RepeatMode.none,
     this.sleepTimerEnd,
     this.selectedSubtitle,
@@ -169,6 +210,24 @@ class PlayerStateData {
   final List<SponsorSegment> sponsorSegments;
   final SponsorSegment? upcomingSegment;
   final bool showSponsorSkipButton;
+
+  /// The transient "Skipped sponsor · Undo" toast, or null.
+  final SponsorSkipNotice? sponsorNotice;
+
+  /// Segments the user undid a skip on. Held for this video only —
+  /// SmartTube's "don't skip this segment again".
+  final Set<String> doNotSkipSegments;
+
+  /// The video is a paid placement end to end (`exclusive_access`).
+  final bool showPaidPromotionNotice;
+
+  /// The single point the video is about, when one was submitted.
+  SponsorSegment? get highlightSegment {
+    for (final segment in sponsorSegments) {
+      if (segment.category == SponsorCategory.highlight) return segment;
+    }
+    return null;
+  }
   final RepeatMode repeatMode;
   final DateTime? sleepTimerEnd;
   final MediaSubtitle? selectedSubtitle;
@@ -235,6 +294,9 @@ class PlayerStateData {
     List<SponsorSegment>? sponsorSegments,
     SponsorSegment? upcomingSegment,
     bool? showSponsorSkipButton,
+    SponsorSkipNotice? sponsorNotice,
+    Set<String>? doNotSkipSegments,
+    bool? showPaidPromotionNotice,
     RepeatMode? repeatMode,
     DateTime? sleepTimerEnd,
     MediaSubtitle? selectedSubtitle,
@@ -268,6 +330,7 @@ class PlayerStateData {
     bool clearFallbackReason = false,
     bool clearDiagnostics = false,
     bool clearAudioTrack = false,
+    bool clearSponsorNotice = false,
   }) {
     return PlayerStateData(
       currentItem: clearItem ? null : (currentItem ?? this.currentItem),
@@ -287,6 +350,11 @@ class PlayerStateData {
       upcomingSegment: upcomingSegment ?? this.upcomingSegment,
       showSponsorSkipButton:
           showSponsorSkipButton ?? this.showSponsorSkipButton,
+      sponsorNotice:
+          clearSponsorNotice ? null : (sponsorNotice ?? this.sponsorNotice),
+      doNotSkipSegments: doNotSkipSegments ?? this.doNotSkipSegments,
+      showPaidPromotionNotice:
+          showPaidPromotionNotice ?? this.showPaidPromotionNotice,
       repeatMode: repeatMode ?? this.repeatMode,
       sleepTimerEnd:
           clearSleepTimer ? null : (sleepTimerEnd ?? this.sleepTimerEnd),
@@ -401,6 +469,13 @@ class PlayerController extends StateNotifier<PlayerStateData>
   late final LocalLibraryRepository _libraryRepo;
   late final HistorySync _historySync;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
+
+  /// The segment auto-skipped last, so an imprecise seek back into its
+  /// tail does not skip it over and over.
+  String? _lastSkippedKey;
+  Timer? _sponsorNoticeTimer;
+  Timer? _paidPromotionTimer;
+  int _sponsorNoticeId = 0;
 
   /// Whether the video track was dropped because the app went to the
   /// background, so it is only restored if we were the ones who took it.
@@ -660,6 +735,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
           availableHeights: const [],
           sponsorSegments: const [],
         );
+        _onSponsorSegmentsLoaded();
         await _ref.read(audioHandlerProvider).setMediaItem(item);
         return;
       }
@@ -689,6 +765,7 @@ class PlayerController extends StateNotifier<PlayerStateData>
         audioTracks: resolved.audioTracks,
         selectedAudioTrackId: resolved.selectedAudioTrackId,
       );
+      _onSponsorSegmentsLoaded();
 
       final subtitleCode = channelPreferences?.subtitleCode;
       if (subtitleCode != null) {
@@ -1613,6 +1690,9 @@ class PlayerController extends StateNotifier<PlayerStateData>
     state = state.copyWith(sleepTimerEnd: DateTime.now().add(duration));
   }
 
+  /// Runs on every position tick. Resolves the action configured for
+  /// the segment under the playhead — skip it, offer a button, or leave
+  /// it alone — mirroring SmartTube's per-category actions.
   void _checkSponsorSegment(Duration position) {
     final settings = _ref.read(settingsControllerProvider);
     if (state.sponsorSegments.isEmpty || !settings.sponsorBlockEnabled) {
@@ -1622,33 +1702,130 @@ class PlayerController extends StateNotifier<PlayerStateData>
       return;
     }
 
-    SponsorSegment? active;
-    for (final segment in state.sponsorSegments) {
-      if (segment.isActiveAt(position)) {
-        active = segment;
-        break;
+    final match = resolveSponsorSegmentAt(
+      segments: state.sponsorSegments,
+      position: position,
+      actionFor: settings.actionFor,
+      doNotSkip: state.doNotSkipSegments,
+    );
+    final active = match?.segment;
+    final action = match?.action ?? SegmentAction.none;
+
+    if (active == null) {
+      // Out of every segment: the next entry may skip again.
+      _lastSkippedKey = null;
+      if (state.showSponsorSkipButton) {
+        state = state.copyWith(showSponsorSkipButton: false);
       }
+      return;
     }
 
-    if (active != null) {
-      if (settings.autoSkipSponsors) {
-        seek(active.end);
-      } else {
-        state = state.copyWith(
-          upcomingSegment: active,
-          showSponsorSkipButton: true,
-        );
-      }
-    } else if (state.showSponsorSkipButton) {
-      state = state.copyWith(showSponsorSkipButton: false);
+    if (action == SegmentAction.skip) {
+      // Guard against a seek that lands a hair short of the end and
+      // re-triggers the same skip forever.
+      if (_lastSkippedKey == active.key) return;
+      _lastSkippedKey = active.key;
+      _skipWithNotice(active);
+    } else {
+      state = state.copyWith(
+        upcomingSegment: active,
+        showSponsorSkipButton: true,
+      );
     }
   }
 
+  /// Seeks past [segment] and offers the skip back for a few seconds.
+  void _skipWithNotice(SponsorSegment segment) {
+    // A submitted segment can end past the real media length; seeking
+    // beyond it is what used to strand playback at the very end.
+    final duration = state.duration;
+    seek(
+      duration > Duration.zero && segment.end > duration
+          ? duration
+          : segment.end,
+    );
+    _showSponsorNotice(segment);
+  }
+
+  void _showSponsorNotice(SponsorSegment segment) {
+    _sponsorNoticeTimer?.cancel();
+    state = state.copyWith(
+      showSponsorSkipButton: false,
+      sponsorNotice: SponsorSkipNotice(
+        segment: segment,
+        id: ++_sponsorNoticeId,
+      ),
+    );
+    _sponsorNoticeTimer = Timer(const Duration(seconds: 4), () {
+      if (state.sponsorNotice?.id == _sponsorNoticeId) {
+        state = state.copyWith(clearSponsorNotice: true);
+      }
+    });
+  }
+
+  /// The skip button: seeks past the segment the button is offering.
   void skipSponsorSegment() {
     final segment = state.upcomingSegment;
     if (segment == null) return;
-    seek(segment.end);
-    state = state.copyWith(showSponsorSkipButton: false);
+    _lastSkippedKey = segment.key;
+    _skipWithNotice(segment);
+  }
+
+  /// Undo: back to where the segment started, and this segment is not
+  /// skipped again for the rest of the video.
+  void undoSponsorSkip() {
+    final notice = state.sponsorNotice;
+    if (notice == null) return;
+    _sponsorNoticeTimer?.cancel();
+    _lastSkippedKey = null;
+    state = state.copyWith(
+      doNotSkipSegments: {...state.doNotSkipSegments, notice.segment.key},
+      showSponsorSkipButton: false,
+      clearSponsorNotice: true,
+    );
+    seek(notice.segment.start);
+  }
+
+  void dismissSponsorNotice() {
+    _sponsorNoticeTimer?.cancel();
+    state = state.copyWith(clearSponsorNotice: true);
+  }
+
+  void dismissPaidPromotionNotice() {
+    _paidPromotionTimer?.cancel();
+    if (state.showPaidPromotionNotice) {
+      state = state.copyWith(showPaidPromotionNotice: false);
+    }
+  }
+
+  /// Jumps to the community-marked highlight, when the video has one.
+  void jumpToHighlight() {
+    final highlight = state.highlightSegment;
+    if (highlight == null) return;
+    seek(highlight.start);
+  }
+
+  /// Resets the per-video sponsor state and raises the paid-promotion
+  /// notice when the whole video is a placement.
+  void _onSponsorSegmentsLoaded() {
+    _lastSkippedKey = null;
+    _sponsorNoticeTimer?.cancel();
+    _paidPromotionTimer?.cancel();
+    final isPaid = state.sponsorSegments
+        .any((s) => s.category == SponsorCategory.exclusiveAccess);
+    state = state.copyWith(
+      doNotSkipSegments: const {},
+      showSponsorSkipButton: false,
+      showPaidPromotionNotice:
+          isPaid && _ref.read(settingsControllerProvider).sponsorBlockEnabled,
+      clearSponsorNotice: true,
+    );
+    if (state.showPaidPromotionNotice) {
+      _paidPromotionTimer = Timer(
+        const Duration(seconds: 8),
+        () => state = state.copyWith(showPaidPromotionNotice: false),
+      );
+    }
   }
 
   /// Stops playback and persists progress.
@@ -1725,6 +1902,8 @@ class PlayerController extends StateNotifier<PlayerStateData>
     _bufferRecoveryTimer?.cancel();
     _upNextTimer?.cancel();
     _relatedWarm?.close();
+    _sponsorNoticeTimer?.cancel();
+    _paidPromotionTimer?.cancel();
     _saveCurrentPosition();
     for (final sub in _subscriptions) {
       sub.cancel();

@@ -582,5 +582,21 @@
     }
   },
   "playNow": "Play now",
-  "replay": "Replay"
+  "replay": "Replay",
+  "segmentActionSkip": "Skip automatically",
+  "segmentActionShowButton": "Show a skip button",
+  "segmentActionNone": "Do nothing",
+  "sponsorCategoryActions": "What to do per category",
+  "categoryExclusiveAccess": "Exclusive access",
+  "sponsorSkipped": "Skipped {category}",
+  "@sponsorSkipped": {
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
+  "undo": "Undo",
+  "jumpToHighlight": "Jump to highlight",
+  "paidPromotionNotice": "Includes paid promotion"
 }

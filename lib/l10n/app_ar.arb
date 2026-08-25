@@ -561,5 +561,21 @@
     }
   },
   "playNow": "تشغيل الآن",
-  "replay": "إعادة التشغيل"
+  "replay": "إعادة التشغيل",
+  "segmentActionSkip": "تخطٍ تلقائي",
+  "segmentActionShowButton": "إظهار زر التخطي",
+  "segmentActionNone": "بدون إجراء",
+  "sponsorCategoryActions": "الإجراء لكل فئة",
+  "categoryExclusiveAccess": "وصول حصري",
+  "sponsorSkipped": "تم تخطي {category}",
+  "@sponsorSkipped": {
+    "placeholders": {
+      "category": {
+        "type": "String"
+      }
+    }
+  },
+  "undo": "تراجع",
+  "jumpToHighlight": "الانتقال إلى اللقطة المميزة",
+  "paidPromotionNotice": "يتضمن ترويجًا مدفوعًا"
 }

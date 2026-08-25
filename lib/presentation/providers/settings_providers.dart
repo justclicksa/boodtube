@@ -168,21 +168,27 @@ class SettingsController extends StateNotifier<AppSettings> {
     await _repo.setSponsorBlockEnabled(enabled);
   }
 
+  /// The coarse switch, kept for the settings screen: it moves every
+  /// enabled category between skipping and offering a button.
   Future<void> setAutoSkipSponsors(bool enabled) async {
-    state = state.copyWith(autoSkipSponsors: enabled);
     await _repo.setAutoSkipSponsors(enabled);
+    state = state.copyWith(sponsorActions: _repo.readSponsorActions());
   }
 
   Future<void> toggleSponsorCategory(
       SponsorCategory category, bool enabled) async {
-    final current = {...state.sponsorCategories};
-    if (enabled) {
-      current.add(category);
-    } else {
-      current.remove(category);
-    }
-    state = state.copyWith(sponsorCategories: current);
     await _repo.toggleSponsorCategory(category, enabled);
+    state = state.copyWith(sponsorActions: _repo.readSponsorActions());
+  }
+
+  /// The per-category action — SmartTube's skip / notify / ignore.
+  Future<void> setSponsorAction(
+    SponsorCategory category,
+    SegmentAction action,
+  ) async {
+    final next = {...state.sponsorActions, category: action};
+    state = state.copyWith(sponsorActions: next);
+    await _repo.setSponsorAction(category, action);
   }
 
   // ============================================================
