@@ -46,6 +46,14 @@ extension LocalizedThumbnail on ClickbaitThumbnail {
       };
 }
 
+extension LocalizedSegmentAction on SegmentAction {
+  String label(AppLocalizations l10n) => switch (this) {
+        SegmentAction.skip => l10n.segmentActionSkip,
+        SegmentAction.showButton => l10n.segmentActionShowButton,
+        SegmentAction.none => l10n.segmentActionNone,
+      };
+}
+
 extension LocalizedSponsorCategory on SponsorCategory {
   String label(AppLocalizations l10n) => switch (this) {
         SponsorCategory.sponsor => l10n.categorySponsor,
@@ -57,6 +65,7 @@ extension LocalizedSponsorCategory on SponsorCategory {
         SponsorCategory.preview => l10n.categoryPreview,
         SponsorCategory.musicOffTopic => l10n.categoryMusicOffTopic,
         SponsorCategory.filler => l10n.categoryFiller,
+        SponsorCategory.exclusiveAccess => l10n.categoryExclusiveAccess,
       };
 }
 

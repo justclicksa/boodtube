@@ -358,7 +358,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
             ),
-            for (final cat in SponsorCategory.values)
+            for (final cat in SponsorCategoryX.actionable)
               _SettingsRow(
                 keywords: [cat.label(l10n), l10n.sponsorSkipCategories],
                 widget: SwitchListTile(

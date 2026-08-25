@@ -1147,4 +1147,33 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get autoQualityLabel => 'Auto';
+
+  @override
+  String get segmentActionSkip => 'Skip automatically';
+
+  @override
+  String get segmentActionShowButton => 'Show a skip button';
+
+  @override
+  String get segmentActionNone => 'Do nothing';
+
+  @override
+  String get sponsorCategoryActions => 'What to do per category';
+
+  @override
+  String get categoryExclusiveAccess => 'Exclusive access';
+
+  @override
+  String sponsorSkipped(String category) {
+    return 'Skipped $category';
+  }
+
+  @override
+  String get undo => 'Undo';
+
+  @override
+  String get jumpToHighlight => 'Jump to highlight';
+
+  @override
+  String get paidPromotionNotice => 'Includes paid promotion';
 }

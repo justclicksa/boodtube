@@ -7,6 +7,7 @@
 
 import 'dart:convert';
 
+import 'package:collection/collection.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../domain/entities/content_filter.dart';
@@ -103,8 +104,33 @@ class AppSettings {
   final double defaultSpeed;
   final bool backgroundPlayback;
   final bool sponsorBlockEnabled;
-  final Set<SponsorCategory> sponsorCategories;
-  final bool autoSkipSponsors;
+
+  /// What playback does per SponsorBlock category — SmartTube's
+  /// per-category action instead of one global auto-skip switch.
+  final Map<SponsorCategory, SegmentAction> sponsorActions;
+
+  /// Categories that are acted on at all. Kept as a derived view so
+  /// the older "tick the categories you want" UI still reads naturally.
+  Set<SponsorCategory> get sponsorCategories => {
+        for (final entry in sponsorActions.entries)
+          if (entry.value != SegmentAction.none) entry.key,
+      };
+
+  /// True when at least one enabled category skips outright. The old
+  /// global switch, derived rather than stored.
+  bool get autoSkipSponsors =>
+      sponsorActions.values.any((a) => a == SegmentAction.skip);
+
+  /// Categories to request from the API: everything acted on, plus the
+  /// two informational ones the player surfaces on its own.
+  Set<SponsorCategory> get sponsorFetchCategories => {
+        ...sponsorCategories,
+        SponsorCategory.highlight,
+        SponsorCategory.exclusiveAccess,
+      };
+
+  SegmentAction actionFor(SponsorCategory category) =>
+      resolveSegmentAction(sponsorActions, category);
   final String language; // 'en', 'ar'
   final bool notificationsEnabled;
   final bool pictureInPictureEnabled;
@@ -142,14 +168,16 @@ class AppSettings {
     this.defaultSpeed = 1.0,
     this.backgroundPlayback = true,
     this.sponsorBlockEnabled = true,
-    this.sponsorCategories = const {
-      SponsorCategory.sponsor,
-      SponsorCategory.intro,
-      SponsorCategory.outro,
-      SponsorCategory.selfPromo,
-      SponsorCategory.interaction,
+    this.sponsorActions = const {
+      SponsorCategory.sponsor: SegmentAction.skip,
+      SponsorCategory.intro: SegmentAction.skip,
+      SponsorCategory.outro: SegmentAction.skip,
+      SponsorCategory.selfPromo: SegmentAction.skip,
+      SponsorCategory.interaction: SegmentAction.skip,
+      SponsorCategory.preview: SegmentAction.skip,
+      SponsorCategory.musicOffTopic: SegmentAction.skip,
+      SponsorCategory.filler: SegmentAction.none,
     },
-    this.autoSkipSponsors = false,
     this.language = 'en',
     this.notificationsEnabled = true,
     this.pictureInPictureEnabled = true,
@@ -175,8 +203,7 @@ class AppSettings {
     double? defaultSpeed,
     bool? backgroundPlayback,
     bool? sponsorBlockEnabled,
-    Set<SponsorCategory>? sponsorCategories,
-    bool? autoSkipSponsors,
+    Map<SponsorCategory, SegmentAction>? sponsorActions,
     String? language,
     bool? notificationsEnabled,
     bool? pictureInPictureEnabled,
@@ -196,8 +223,7 @@ class AppSettings {
       defaultSpeed: defaultSpeed ?? this.defaultSpeed,
       backgroundPlayback: backgroundPlayback ?? this.backgroundPlayback,
       sponsorBlockEnabled: sponsorBlockEnabled ?? this.sponsorBlockEnabled,
-      sponsorCategories: sponsorCategories ?? this.sponsorCategories,
-      autoSkipSponsors: autoSkipSponsors ?? this.autoSkipSponsors,
+      sponsorActions: sponsorActions ?? this.sponsorActions,
       language: language ?? this.language,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       pictureInPictureEnabled:
@@ -226,6 +252,7 @@ class SettingsRepository {
   static const _keySponsorBlockEnabled = 'settings.sponsor_block_enabled';
   static const _keySponsorCategories = 'settings.sponsor_categories';
   static const _keyAutoSkipSponsors = 'settings.auto_skip_sponsors';
+  static const _keySponsorActions = 'settings.sponsor_actions';
   static const _keyLanguage = 'settings.language';
   static const _keyNotificationsEnabled = 'settings.notifications';
   static const _keyPiP = 'settings.pip';
@@ -251,8 +278,7 @@ class SettingsRepository {
       defaultSpeed: _prefs.getDouble(_keyDefaultSpeed) ?? 1.0,
       backgroundPlayback: _prefs.getBool(_keyBackgroundPlayback) ?? true,
       sponsorBlockEnabled: _prefs.getBool(_keySponsorBlockEnabled) ?? true,
-      sponsorCategories: _readSponsorCategories(),
-      autoSkipSponsors: _prefs.getBool(_keyAutoSkipSponsors) ?? false,
+      sponsorActions: readSponsorActions(),
       language: _prefs.getString(_keyLanguage) ?? 'en',
       notificationsEnabled: _prefs.getBool(_keyNotificationsEnabled) ?? true,
       pictureInPictureEnabled: _prefs.getBool(_keyPiP) ?? true,
@@ -300,25 +326,78 @@ class SettingsRepository {
     await _prefs.setBool(_keySponsorBlockEnabled, enabled);
   }
 
+  /// Persists the whole action map, and mirrors it onto the two legacy
+  /// keys so an older build (or a restored backup) still finds the
+  /// categories it understands.
+  Future<void> setSponsorActions(
+    Map<SponsorCategory, SegmentAction> actions,
+  ) async {
+    final encoded = actions.entries
+        .map((e) => '${e.key.name}:${e.value.name}')
+        .join(',');
+    await _prefs.setString(_keySponsorActions, encoded);
+
+    final enabled = actions.entries
+        .where((e) => e.value != SegmentAction.none)
+        .map((e) => e.key.name)
+        .join(',');
+    await _prefs.setString(_keySponsorCategories, enabled);
+    await _prefs.setBool(
+      _keyAutoSkipSponsors,
+      actions.values.any((a) => a == SegmentAction.skip),
+    );
+  }
+
+  Future<void> setSponsorAction(
+    SponsorCategory category,
+    SegmentAction action,
+  ) async {
+    final current = {...readSponsorActions()};
+    current[category] = action;
+    await setSponsorActions(current);
+  }
+
   Future<void> setSponsorCategories(Set<SponsorCategory> categories) async {
-    final values = categories.map((c) => c.name).join(',');
-    await _prefs.setString(_keySponsorCategories, values);
+    final current = {...readSponsorActions()};
+    final fallback = current.values.any((a) => a == SegmentAction.skip)
+        ? SegmentAction.skip
+        : SegmentAction.showButton;
+    for (final category in SponsorCategoryX.actionable) {
+      if (!categories.contains(category)) {
+        current[category] = SegmentAction.none;
+      } else if (resolveSegmentAction(current, category) ==
+          SegmentAction.none) {
+        current[category] = fallback;
+      }
+    }
+    await setSponsorActions(current);
   }
 
   Future<void> toggleSponsorCategory(
       SponsorCategory category, bool enabled) async {
-    // FIXED: create new mutable set (not const)
-    final current = {..._readSponsorCategories()};
+    final current = {...readSponsorActions()};
     if (enabled) {
-      current.add(category);
+      // Re-enabling from the coarse switch restores the skip behaviour
+      // the rest of the enabled categories already have.
+      current[category] = current.values.any((a) => a == SegmentAction.skip)
+          ? SegmentAction.skip
+          : SegmentAction.showButton;
     } else {
-      current.remove(category);
+      current[category] = SegmentAction.none;
     }
-    await setSponsorCategories(current);
+    await setSponsorActions(current);
   }
 
+  /// The legacy global switch, expressed over the action map: flip every
+  /// still-enabled category between skipping and offering a button.
   Future<void> setAutoSkipSponsors(bool enabled) async {
-    await _prefs.setBool(_keyAutoSkipSponsors, enabled);
+    final current = {...readSponsorActions()};
+    for (final entry in current.entries.toList()) {
+      if (entry.value == SegmentAction.none) continue;
+      current[entry.key] =
+          enabled ? SegmentAction.skip : SegmentAction.showButton;
+    }
+    await setSponsorActions(current);
   }
 
   Future<void> setLanguage(String language) async {
@@ -485,23 +564,85 @@ class SettingsRepository {
     );
   }
 
-  Set<SponsorCategory> _readSponsorCategories() {
-    final value = _prefs.getString(_keySponsorCategories);
-    if (value == null || value.isEmpty) {
-      return const {
+  /// The per-category actions, migrating the pre-action settings when
+  /// this is the first run on a build that has them.
+  ///
+  /// Visible for testing.
+  Map<SponsorCategory, SegmentAction> readSponsorActions() {
+    final stored = _prefs.getString(_keySponsorActions);
+    if (stored != null && stored.isNotEmpty) {
+      final actions = <SponsorCategory, SegmentAction>{};
+      for (final pair in stored.split(',')) {
+        final parts = pair.split(':');
+        if (parts.length != 2) continue;
+        final category = SponsorCategory.values
+            .where((c) => c.name == parts[0])
+            .firstOrNull;
+        final action =
+            SegmentAction.values.where((a) => a.name == parts[1]).firstOrNull;
+        if (category == null || action == null) continue;
+        actions[category] = action;
+      }
+      // A category this build knows but the stored map predates keeps
+      // its upstream default rather than silently doing nothing.
+      for (final category in SponsorCategoryX.actionable) {
+        actions.putIfAbsent(
+          category,
+          () => SponsorCategoryX.defaultAction(category),
+        );
+      }
+      return actions;
+    }
+
+    return migrateSponsorActions(
+      legacyCategories: _prefs.getString(_keySponsorCategories),
+      legacyAutoSkip: _prefs.getBool(_keyAutoSkipSponsors),
+    );
+  }
+
+  /// Turns the old `sponsor_categories` + `auto_skip_sponsors` pair into
+  /// per-category actions.
+  ///
+  /// A ticked category becomes [SegmentAction.skip] when auto-skip was
+  /// on and [SegmentAction.showButton] when it was off — which is what
+  /// those two settings together used to mean. An unticked one becomes
+  /// [SegmentAction.none]. With neither key written (a fresh install)
+  /// the SmartTube defaults apply instead.
+  static Map<SponsorCategory, SegmentAction> migrateSponsorActions({
+    String? legacyCategories,
+    bool? legacyAutoSkip,
+  }) {
+    if (legacyCategories == null && legacyAutoSkip == null) {
+      return SponsorCategoryX.defaultActions;
+    }
+
+    final enabled = <SponsorCategory>{};
+    if (legacyCategories == null) {
+      // Auto-skip was set but the categories were never touched: the
+      // old build's own default list was in force.
+      enabled.addAll(const {
         SponsorCategory.sponsor,
         SponsorCategory.intro,
         SponsorCategory.outro,
         SponsorCategory.selfPromo,
         SponsorCategory.interaction,
-      };
+      });
+    } else {
+      for (final name in legacyCategories.split(',')) {
+        final category =
+            SponsorCategory.values.where((c) => c.name == name).firstOrNull;
+        if (category != null) enabled.add(category);
+      }
     }
-    return value
-        .split(',')
-        .map((s) => SponsorCategory.values.firstWhere(
-              (c) => c.name == s,
-              orElse: () => SponsorCategory.sponsor,
-            ))
-        .toSet();
+
+    final onAction = (legacyAutoSkip ?? false)
+        ? SegmentAction.skip
+        : SegmentAction.showButton;
+
+    return {
+      for (final category in SponsorCategoryX.actionable)
+        category:
+            enabled.contains(category) ? onAction : SegmentAction.none,
+    };
   }
 }

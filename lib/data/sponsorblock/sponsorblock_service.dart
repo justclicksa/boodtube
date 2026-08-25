@@ -22,7 +22,13 @@ class SponsorBlockService {
     return SponsorBlockService(Dio());
   }
 
-  /// Get sponsor segments for a video (uses hash-prefix for privacy)
+  /// Get sponsor segments for a video.
+  ///
+  /// `categories` and `actionTypes` are both JSON arrays per
+  /// https://wiki.sponsor.ajay.app/w/API_Docs — and they have to agree:
+  /// the API files `poi_highlight` under the `poi` action type and
+  /// `exclusive_access` under `full`, so asking for either of those
+  /// categories with the default `["skip"]` returns nothing at all.
   Future<List<SponsorSegment>> getSegments(
     String videoId, {
     Set<SponsorCategory> categories = const {
@@ -31,19 +37,25 @@ class SponsorBlockService {
       SponsorCategory.outro,
       SponsorCategory.selfPromo,
       SponsorCategory.interaction,
-      SponsorCategory.highlight,
       SponsorCategory.preview,
+      SponsorCategory.highlight,
     },
   }) async {
     if (categories.isEmpty) return [];
 
+    // Deduplicated, and ordered so the request is stable enough to cache.
+    final actionTypes = <String>{
+      for (final c in categories) c.apiActionType,
+    }.toList()
+      ..sort();
+
     try {
-      // FIXED: use /api/skipSegments (correct endpoint) with categories as JSON array
       final response = await _dio.get<dynamic>(
         '$_baseUrl/api/skipSegments',
         queryParameters: {
           'videoID': videoId,
           'categories': jsonEncode([for (final c in categories) c.apiValue]),
+          'actionTypes': jsonEncode(actionTypes),
         },
       );
 
@@ -53,26 +65,38 @@ class SponsorBlockService {
       if (data is! List || data.isEmpty) return [];
 
       return data
-          .map<SponsorSegment>((json) {
-            final segment = json['segment'] as List<dynamic>?;
+          .map<SponsorSegment?>((json) {
+            if (json is! Map) return null;
+            final bounds = json['segment'] as List<dynamic>?;
+            final category = SponsorCategoryX.tryFromApiValue(
+              json['category'] as String? ?? '',
+            );
+            // An unknown category is a category this build cannot act
+            // on; guessing "sponsor" would skip the wrong thing.
+            if (category == null) return null;
+            final description =
+                (json['description'] as String? ?? '').trim();
             return SponsorSegment(
               start: Duration(
-                milliseconds: segment != null && segment.isNotEmpty
-                    ? ((segment[0] as num) * 1000).toInt()
+                milliseconds: bounds != null && bounds.isNotEmpty
+                    ? ((bounds[0] as num) * 1000).toInt()
                     : 0,
               ),
               end: Duration(
-                milliseconds: segment != null && segment.length > 1
-                    ? ((segment[1] as num) * 1000).toInt()
+                milliseconds: bounds != null && bounds.length > 1
+                    ? ((bounds[1] as num) * 1000).toInt()
                     : 0,
               ),
-              category: SponsorCategoryX.fromApiValue(
-                json['category'] as String? ?? 'sponsor',
-              ),
+              category: category,
+              description: description.isEmpty ? null : description,
               uuid: json['UUID'] as String?,
             );
           })
-          .where((s) => s.isNotEmpty)
+          .whereType<SponsorSegment>()
+          // A highlight is a single instant and exclusive access is
+          // reported as [0, 0]; only skippable categories have to span
+          // real time to be worth keeping.
+          .where((s) => s.isNotEmpty || !s.category.isSkippable)
           .toList();
     } catch (e) {
       // Fail silently — sponsorblock is optional

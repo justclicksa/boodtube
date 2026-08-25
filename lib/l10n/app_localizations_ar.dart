@@ -1160,4 +1160,33 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get autoQualityLabel => 'تلقائي';
+
+  @override
+  String get segmentActionSkip => 'تخطٍ تلقائي';
+
+  @override
+  String get segmentActionShowButton => 'إظهار زر التخطي';
+
+  @override
+  String get segmentActionNone => 'بدون إجراء';
+
+  @override
+  String get sponsorCategoryActions => 'الإجراء لكل فئة';
+
+  @override
+  String get categoryExclusiveAccess => 'وصول حصري';
+
+  @override
+  String sponsorSkipped(String category) {
+    return 'تم تخطي $category';
+  }
+
+  @override
+  String get undo => 'تراجع';
+
+  @override
+  String get jumpToHighlight => 'الانتقال إلى اللقطة المميزة';
+
+  @override
+  String get paidPromotionNotice => 'يتضمن ترويجًا مدفوعًا';
 }

@@ -2101,6 +2101,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Auto'**
   String get autoQualityLabel;
+
+  /// No description provided for @segmentActionSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip automatically'**
+  String get segmentActionSkip;
+
+  /// No description provided for @segmentActionShowButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Show a skip button'**
+  String get segmentActionShowButton;
+
+  /// No description provided for @segmentActionNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Do nothing'**
+  String get segmentActionNone;
+
+  /// No description provided for @sponsorCategoryActions.
+  ///
+  /// In en, this message translates to:
+  /// **'What to do per category'**
+  String get sponsorCategoryActions;
+
+  /// No description provided for @categoryExclusiveAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Exclusive access'**
+  String get categoryExclusiveAccess;
+
+  /// No description provided for @sponsorSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped {category}'**
+  String sponsorSkipped(String category);
+
+  /// No description provided for @undo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get undo;
+
+  /// No description provided for @jumpToHighlight.
+  ///
+  /// In en, this message translates to:
+  /// **'Jump to highlight'**
+  String get jumpToHighlight;
+
+  /// No description provided for @paidPromotionNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Includes paid promotion'**
+  String get paidPromotionNotice;
 }
 
 class _AppLocalizationsDelegate
