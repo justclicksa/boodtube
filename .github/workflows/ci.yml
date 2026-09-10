@@ -36,9 +36,23 @@ jobs:
   build-android:
     needs: [analyze, test]
     runs-on: ubuntu-latest
+    # The Android app decodes video with SmartTube's own engine, and
+    # android/smarttube-modules.gradle consumes the forked ExoPlayer and
+    # MediaServiceCore straight from the parent checkout. So the parent
+    # repo (with its submodules) has to be on disk, with this repo sitting
+    # where it does locally: <smarttube>/flutter_poc.
+    defaults:
+      run:
+        working-directory: smarttube/flutter_poc
     steps:
       - uses: actions/checkout@v4
-      # FIXED: removed SharedModules checkout (this is Flutter, not original Android project)
+        with:
+          repository: yuliskov/SmartTube
+          submodules: recursive
+          path: smarttube
+      - uses: actions/checkout@v4
+        with:
+          path: smarttube/flutter_poc
       - uses: actions/setup-java@v3
         with:
           java-version: '17'
@@ -52,7 +66,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: android-build-${{ github.run_number }}-${{ github.sha }}
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: smarttube/flutter_poc/build/app/outputs/flutter-apk/app-release.apk
 
   build-ios:
     needs: [analyze, test]
