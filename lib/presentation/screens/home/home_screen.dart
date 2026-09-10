@@ -29,6 +29,7 @@ import '../../widgets/error_view.dart';
 import '../../widgets/empty_view.dart';
 import '../../widgets/feed_tail.dart';
 import '../../widgets/video_card.dart';
+import '../../routing/app_router.dart' show tabReselectedProvider;
 import '../browse/browse_screen.dart';
 import '../shorts/shorts_screen.dart' show shortsProvider;
 import '../player/widgets/cast_device_sheet.dart';
@@ -98,20 +99,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ];
     final topic = ref.watch(selectedTopicProvider);
 
+    // Tapping Home while already on Home jumps back to the top, the way
+    // YouTube's own tab bar behaves. The shell raises the signal; the
+    // scroll position lives here.
+    ref.listen<int>(tabReselectedProvider, (_, __) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    });
+
     return Scaffold(
       drawer: const AppDrawer(),
       body: RefreshIndicator(
+        // Awaited, not fired and forgotten: invalidate returns at once,
+        // so the spinner used to vanish a frame later while the feed was
+        // still being fetched, and the pull read as having done nothing.
         onRefresh: () async {
           if (topic == null) {
             ref
               ..invalidate(homeFeedPagedProvider)
               ..invalidate(shortsProvider);
+            await ref.read(homeFeedPagedProvider.future);
           } else {
             ref.invalidate(browseCategoryProvider(topic));
+            await ref.read(browseCategoryProvider(topic).future);
           }
         },
         child: CustomScrollView(
           controller: _scrollController,
+          // So the pull works even when the feed is shorter than the
+          // screen — an empty or failed feed is exactly when a refresh
+          // matters most.
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             _appBar(context, l10n, topics, topic),
             ...topic == null ? _mixedSlivers(l10n) : _topicSlivers(l10n, topic),

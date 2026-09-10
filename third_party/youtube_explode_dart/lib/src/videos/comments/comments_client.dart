@@ -28,15 +28,20 @@ class CommentsClient {
     return CommentsList(
       page.comments!
           .map(
+            // BOODTUBE PATCH: the parser now drops comments it cannot
+            // read (isUsable), so author, channelId and text are known
+            // to be present here; publishTime is not, and an unlabelled
+            // comment is better than none.
             (e) => Comment(
-              e.author,
-              ChannelId(e.channelId),
-              e.text,
+              e.author!,
+              ChannelId(e.channelId!),
+              e.text!,
               e.likeCount ?? 0,
-              e.publishTime,
+              e.publishTime ?? '',
               e.repliesCount ?? 0,
               e.isHearted,
               e.continuation,
+              e.channelThumbnail,
             ),
           )
           .toList(growable: false),
@@ -61,15 +66,20 @@ class CommentsClient {
     return CommentsList(
       page.comments!
           .map(
+            // BOODTUBE PATCH: the parser now drops comments it cannot
+            // read (isUsable), so author, channelId and text are known
+            // to be present here; publishTime is not, and an unlabelled
+            // comment is better than none.
             (e) => Comment(
-              e.author,
-              ChannelId(e.channelId),
-              e.text,
+              e.author!,
+              ChannelId(e.channelId!),
+              e.text!,
               e.likeCount ?? 0,
-              e.publishTime,
+              e.publishTime ?? '',
               e.repliesCount ?? 0,
               e.isHearted,
               e.continuation,
+              e.channelThumbnail,
             ),
           )
           .toList(growable: false),

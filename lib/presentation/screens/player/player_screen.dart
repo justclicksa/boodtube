@@ -12,7 +12,8 @@ import 'dart:async';
 // name in services/download_manager.dart.
 import 'package:cached_network_image/cached_network_image.dart'
     show CachedNetworkImageProvider;
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart'
+    show ValueListenable, ValueNotifier, visibleForTesting;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
@@ -76,9 +77,16 @@ class PlayerScreen extends ConsumerStatefulWidget {
 class _PlayerScreenState extends ConsumerState<PlayerScreen>
     with SingleTickerProviderStateMixin {
   late final PlayerEngine _engine;
-  bool _showControls = true;
+
+  /// Controls visibility rides a notifier, not setState. Measured on a
+  /// release build on a device: setState on this mounted state stopped
+  /// producing a rebuild once fullscreen had been entered, so the bar
+  /// could never appear — while the same frames kept rebuilding
+  /// ValueListenableBuilder subtrees without trouble. Driving the one
+  /// piece of transient state through the path that demonstrably works
+  /// also stops a whole-screen rebuild on every tap.
+  final ValueNotifier<bool> _showControls = ValueNotifier<bool>(true);
   Timer? _hideTimer;
-  bool _descriptionExpanded = false;
 
   /// Transient HUD shown while dragging for brightness/volume.
   double? _gestureValue;
@@ -131,7 +139,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       onModeChanged: (active) {
         if (!mounted) return;
         ref.read(playerControllerProvider.notifier).setPiPActive(active);
-        setState(() => _showControls = !active);
+        _setShowControls(!active);
       },
       // Home/Recents while a video is playing: shrink into PiP like the
       // official app, when the setting allows it.
@@ -169,6 +177,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   @override
   void dispose() {
     _hideTimer?.cancel();
+    _showControls.dispose();
     _settle.dispose();
     // Writing to a provider during a dependent's dispose is not allowed,
     // so hand the flag back on the next frame, through the container
@@ -181,16 +190,30 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     super.dispose();
   }
 
+  /// Single door for every write, so the hide timer, the tap and the PiP
+  /// callback cannot each hold their own idea of whether the bar is up.
+  void _setShowControls(bool value) {
+    _showControls.value = value;
+  }
+
   void _restartHideTimer() {
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _showControls = false);
+      if (mounted) _setShowControls(false);
     });
   }
 
+  /// Tap to show, tap again to hide. Hiding by hand also drops the
+  /// pending auto-hide, so a timer armed by the previous tap cannot fire
+  /// later over a bar the user has already dismissed.
   void _toggleControls() {
-    setState(() => _showControls = !_showControls);
-    if (_showControls) _restartHideTimer();
+    final next = !_showControls.value;
+    _setShowControls(next);
+    if (next) {
+      _restartHideTimer();
+    } else {
+      _hideTimer?.cancel();
+    }
   }
 
   // ============================================================
@@ -315,6 +338,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Watched from a Consumer rather than from this element. Measured on
+    // a release build on a device: once fullscreen has been entered this
+    // element stops rebuilding altogether — neither setState nor a
+    // provider change produces a build here again, while descendant
+    // Consumer and ValueListenableBuilder subtrees keep rebuilding
+    // normally in the same frames. That is what froze the control bar,
+    // the play/pause icon, and the layout itself on the way back out of
+    // fullscreen: the state changed and nothing re-read it. Reading the
+    // state one level down puts every rebuild on the path that works.
+    return Consumer(
+      builder: (context, ref, _) => _buildPlayer(context, ref),
+    );
+  }
+
+  Widget _buildPlayer(BuildContext context, WidgetRef ref) {
     final state = ref.watch(playerControllerProvider);
     final isFullscreen = state.isFullscreen;
 
@@ -385,21 +423,30 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           child: Column(
             children: [
               if (expanded)
+                // Full bleed on purpose: a tap has to register anywhere
+                // on the screen, and letterboxing the surface to 16:9
+                // would leave bars that swallow every gesture landing on
+                // them. mpv letterboxes the picture inside this box.
                 Expanded(
                   child: Stack(
                     children: [player, _gestureHud()],
                   ),
                 )
               else
-                // Loose so the video gives way rather than overflowing
-                // if this layout ever renders in a viewport too short
-                // for a full 16:9 — mid-rotation, or a split view.
-                Flexible(
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Stack(
-                      children: [player, _gestureHud()],
-                    ),
+                // Not Flexible. Flexible defaults to flex: 1, so
+                // the video and the watch page below it each took
+                // half the column — and the video, being loose,
+                // used only its natural 16:9 height out of that
+                // half. The remainder of its share was dead space
+                // nothing could fill, which is the black band that
+                // sat under the suggestions. Measured on device:
+                // 863 available, 430 handed to the watch page,
+                // 186 lost. Sized to its own ratio, the video
+                // takes what it needs and Expanded gets the rest.
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Stack(
+                    children: [player, _gestureHud()],
                   ),
                 ),
               if (!expanded)
@@ -413,11 +460,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           opacity: 1 - collapseProgress,
                           child: _WatchDetails(
                             item: state.currentItem!,
-                            descriptionExpanded: _descriptionExpanded,
-                            onToggleDescription: () => setState(
-                              () =>
-                                  _descriptionExpanded = !_descriptionExpanded,
-                            ),
                           ),
                         ),
                 ),
@@ -428,14 +470,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
 
     // Shrinking toward the top keeps the video under the finger while
-    // the page narrows toward the mini player's footprint.
-    //
-    // These wrappers are unconditional even at rest. Introducing them
-    // only once the drag starts changes the shape of the tree, which
-    // remounts everything below — including the GestureDetector whose
-    // drag is in flight. The recognizer is then disposed mid-gesture and
-    // neither onVerticalDragEnd nor onVerticalDragCancel ever fires, so
-    // the player sticks halfway down with no way back.
+    // the page narrows toward the mini player's footprint. Wrapping the
+    // scaffold rather than rebuilding the tree into a different shape
+    // only once the drag starts matters: changing the shape remounts
+    // everything below, including the GestureDetector whose drag is in
+    // flight, and the recognizer is then disposed mid-gesture.
     return Transform.translate(
       offset: Offset(0, _dragOffset),
       child: Transform.scale(
@@ -503,7 +542,7 @@ class _PlayerSurface extends ConsumerStatefulWidget {
 
   final PlayerStateData state;
   final PlayerEngine engine;
-  final bool showControls;
+  final ValueListenable<bool> showControls;
   final VoidCallback onToggleControls;
   final VoidCallback onInteract;
   final VoidCallback onToggleFullscreen;
@@ -538,6 +577,7 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
   @override
   void dispose() {
     _seekBadgeTimer?.cancel();
+    _singleTapTimer?.cancel();
     super.dispose();
   }
 
@@ -722,7 +762,13 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
           widget.onCollapseDragEnd(velocity);
         }
       case PlayerVerticalDragMode.leaveFullscreen:
-        if (total > 60 || velocity > 700) widget.onToggleFullscreen();
+        // Either direction leaves. An upward swipe used to be claimed by
+        // this mode and then dropped for pointing the wrong way, so most
+        // of the screen swallowed the gesture without doing anything at
+        // all — no exit, no brightness, no volume.
+        if (total.abs() > 60 || velocity.abs() > 700) {
+          widget.onToggleFullscreen();
+        }
       case PlayerVerticalDragMode.brightness:
       case PlayerVerticalDragMode.volume:
         widget.onGestureEnd();
@@ -731,12 +777,39 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
     }
   }
 
+  /// Tap-vs-double-tap is disambiguated by hand, not by Flutter's
+  /// DoubleTapGestureRecognizer, which resolves a single tap by arena
+  /// sweep after the double-tap deadline and lost taps outright on a
+  /// physical device.
+  ///
+  /// There is exactly one gesture region over the surface. A second one
+  /// used to be laid over it whenever the controls were hidden, which
+  /// put two identical detectors in one arena for every tap — and made
+  /// the hidden state behave differently from the visible one for no
+  /// reason the user could see. The surface region already covers
+  /// everything with HitTestBehavior.opaque, and the controls plane
+  /// ignores pointers while hidden, so nothing needed the second layer.
+  Timer? _singleTapTimer;
+
+  void _onTapUp(TapUpDetails details) {
+    final pending = _singleTapTimer;
+    if (pending != null && pending.isActive) {
+      pending.cancel();
+      _singleTapTimer = null;
+      _onDoubleTap(details.globalPosition);
+      return;
+    }
+    _singleTapTimer = Timer(const Duration(milliseconds: 250), () {
+      _singleTapTimer = null;
+      widget.onToggleControls();
+    });
+  }
+
   Widget _gestureRegion({required Widget child, Key? key}) {
     return GestureDetector(
       key: key,
       behavior: HitTestBehavior.opaque,
-      onTap: widget.onToggleControls,
-      onDoubleTapDown: (details) => _onDoubleTap(details.globalPosition),
+      onTapUp: _onTapUp,
       onLongPressStart: (_) => _startSpeedHold(),
       onLongPressEnd: (_) => _endSpeedHold(),
       onLongPressCancel: _endSpeedHold,
@@ -802,16 +875,6 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
             // above it and guarantees that a tap or vertical swipe reaches
             // BoodTube. It disappears when controls are visible so buttons
             // and the progress slider remain directly interactive.
-            if (!widget.showControls && state.error == null)
-              Positioned.fill(
-                child: _gestureRegion(
-                  key: const ValueKey(
-                    'player-hidden-controls-gesture-layer',
-                  ),
-                  child: const SizedBox.expand(),
-                ),
-              ),
-
             if (state.isLoading || (state.isBuffering && state.error == null))
               Center(
                 child: Column(
@@ -877,9 +940,12 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
             PositionedDirectional(
               start: 12,
               bottom: 64,
-              child: _SponsorNotices(
-                state: state,
-                showControls: widget.showControls,
+              child: ValueListenableBuilder<bool>(
+                valueListenable: widget.showControls,
+                builder: (context, shown, _) => _SponsorNotices(
+                  state: state,
+                  showControls: shown,
+                ),
               ),
             ),
 
@@ -887,17 +953,21 @@ class _PlayerSurfaceState extends ConsumerState<_PlayerSurface> {
               // Fading rather than snapping: the controls appearing and
               // vanishing between frames is what made every tap feel
               // like a redraw instead of a response.
-              IgnorePointer(
-                ignoring: !widget.showControls,
-                child: AnimatedOpacity(
-                  opacity: widget.showControls ? 1 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOut,
-                  child: _ControlsOverlay(
-                    state: state,
-                    onInteract: widget.onInteract,
-                    onToggleFullscreen: widget.onToggleFullscreen,
+              ValueListenableBuilder<bool>(
+                valueListenable: widget.showControls,
+                builder: (context, shown, child) => IgnorePointer(
+                  ignoring: !shown,
+                  child: AnimatedOpacity(
+                    opacity: shown ? 1 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    child: child,
                   ),
+                ),
+                child: _ControlsOverlay(
+                  state: state,
+                  onInteract: widget.onInteract,
+                  onToggleFullscreen: widget.onToggleFullscreen,
                 ),
               ),
 
@@ -1119,6 +1189,10 @@ class _ControlsOverlay extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watched, not taken from the constructor: the snapshot handed down
+    // from the screen went stale in fullscreen and left the play button
+    // showing pause over a paused video.
+    final state = ref.watch(playerControllerProvider);
     final controller = ref.read(playerControllerProvider.notifier);
     final quickActions = ref.watch(
       settingsControllerProvider.select(
@@ -1143,106 +1217,112 @@ class _ControlsOverlay extends ConsumerWidget {
             stops: [0, 0.45, 1],
           ),
         ),
-        child: Column(
-          children: [
-            // Top bar
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.keyboard_arrow_down,
-                      color: Colors.white, size: 28),
-                  onPressed: () {
-                    if (state.isFullscreen) {
-                      onToggleFullscreen();
-                    } else {
-                      context.pop();
-                    }
-                  },
-                ),
-                const Spacer(),
-                // Only where the platform can actually do it. On iOS PiP
-                // needs an AVPlayerLayer the system owns, and mpv renders
-                // into a texture — so the button would never do anything
-                // but show an apology.
-                for (final action in quickActions)
-                  if (action != PlayerQuickAction.pictureInPicture ||
-                      (PiPManager.isAvailableOnThisPlatform &&
-                          ref.watch(settingsControllerProvider
-                              .select((s) => s.pictureInPictureEnabled))))
-                    _QuickActionButton(
-                      action: action,
-                      item: state.currentItem,
-                      hasSubtitles:
-                          state.currentItem?.subtitles.isNotEmpty ?? false,
-                      onInteract: onInteract,
-                    ),
-              ],
-            ),
-
-            // Center transport
-            Expanded(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+        // Fullscreen turns the screen's SafeArea off so the picture can
+        // reach the edges, which also put the settings button under the
+        // notch. The controls take the inset back for themselves; nested
+        // SafeAreas consume the padding once, so portrait is unaffected.
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Top bar
+              Row(
                 children: [
-                  _RoundControl(
-                    icon: Icons.replay_10,
-                    onTap: () {
-                      controller.seekBackward();
-                      onInteract();
+                  IconButton(
+                    icon: const Icon(Icons.keyboard_arrow_down,
+                        color: Colors.white, size: 28),
+                    onPressed: () {
+                      if (state.isFullscreen) {
+                        onToggleFullscreen();
+                      } else {
+                        context.pop();
+                      }
                     },
                   ),
-                  const SizedBox(width: 28),
-                  _RoundControl(
-                    icon: state.isPlaying
-                        ? Icons.pause
-                        : (state.position >= state.duration &&
-                                state.duration > Duration.zero)
-                            ? Icons.replay
-                            : Icons.play_arrow,
-                    size: 44,
-                    onTap: () {
-                      controller.togglePlayPause();
-                      onInteract();
-                    },
-                  ),
-                  const SizedBox(width: 28),
-                  _RoundControl(
-                    icon: Icons.forward_10,
-                    onTap: () {
-                      controller.seekForward();
-                      onInteract();
-                    },
-                  ),
+                  const Spacer(),
+                  // Only where the platform can actually do it. On iOS PiP
+                  // needs an AVPlayerLayer the system owns, and mpv renders
+                  // into a texture — so the button would never do anything
+                  // but show an apology.
+                  for (final action in quickActions)
+                    if (action != PlayerQuickAction.pictureInPicture ||
+                        (PiPManager.isAvailableOnThisPlatform &&
+                            ref.watch(settingsControllerProvider
+                                .select((s) => s.pictureInPictureEnabled))))
+                      _QuickActionButton(
+                        action: action,
+                        item: state.currentItem,
+                        hasSubtitles:
+                            state.currentItem?.subtitles.isNotEmpty ?? false,
+                        onInteract: onInteract,
+                      ),
                 ],
               ),
-            ),
 
-            // Current chapter, the way YouTube labels the scrubber.
-            if (_currentChapter(state) != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text(
-                    _currentChapter(state)!.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+              // Center transport
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _RoundControl(
+                      icon: Icons.replay_10,
+                      onTap: () {
+                        controller.seekBackward();
+                        onInteract();
+                      },
                     ),
-                  ),
+                    const SizedBox(width: 28),
+                    _RoundControl(
+                      icon: state.isPlaying
+                          ? Icons.pause
+                          : (state.position >= state.duration &&
+                                  state.duration > Duration.zero)
+                              ? Icons.replay
+                              : Icons.play_arrow,
+                      size: 44,
+                      onTap: () {
+                        controller.togglePlayPause();
+                        onInteract();
+                      },
+                    ),
+                    const SizedBox(width: 28),
+                    _RoundControl(
+                      icon: Icons.forward_10,
+                      onTap: () {
+                        controller.seekForward();
+                        onInteract();
+                      },
+                    ),
+                  ],
                 ),
               ),
 
-            // Bottom bar
-            PlayerScrubBar(
-              state: state,
-              onInteract: onInteract,
-              onToggleFullscreen: onToggleFullscreen,
-            ),
-          ],
+              // Current chapter, the way YouTube labels the scrubber.
+              if (_currentChapter(state) != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      _currentChapter(state)!.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+
+              // Bottom bar
+              PlayerScrubBar(
+                state: state,
+                onInteract: onInteract,
+                onToggleFullscreen: onToggleFullscreen,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1892,13 +1972,9 @@ class _SponsorPill extends StatelessWidget {
 class _WatchDetails extends ConsumerWidget {
   const _WatchDetails({
     required this.item,
-    required this.descriptionExpanded,
-    required this.onToggleDescription,
   });
 
   final MediaItem item;
-  final bool descriptionExpanded;
-  final VoidCallback onToggleDescription;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1914,36 +1990,41 @@ class _WatchDetails extends ConsumerWidget {
     final related = ref.watch(relatedVideosProvider(item.videoId));
 
     return ListView(
-      padding: EdgeInsets.zero,
+      // Room under the last suggestion so it is not flush against the
+      // bottom of the screen.
+      padding: const EdgeInsets.only(bottom: 24),
       children: [
-        // Title + metadata
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                item.title,
-                maxLines: descriptionExpanded ? null : 2,
-                overflow: descriptionExpanded
-                    ? TextOverflow.visible
-                    : TextOverflow.ellipsis,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  height: 1.3,
+        // Title + metadata. Tapping opens the description sheet, which
+        // is where YouTube puts the rest of the title too.
+        GestureDetector(
+          onTap: () => showDescriptionSheet(context, item),
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    height: 1.3,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                <String>[
-                  if (item.viewCount != null)
-                    l10n.viewsCount(compactCount(item.viewCount!)),
-                  relativeDate(l10n, item.publishedAt),
-                ].where((p) => p.isNotEmpty).join(' · '),
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  <String>[
+                    if (item.viewCount != null)
+                      l10n.viewsCount(compactCount(item.viewCount!)),
+                    relativeDate(l10n, item.publishedAt),
+                  ].where((p) => p.isNotEmpty).join(' · '),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
           ),
         ),
 
@@ -1952,7 +2033,10 @@ class _WatchDetails extends ConsumerWidget {
           height: 52,
           child: ListView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            // Directional: a horizontal list in RTL starts at the
+            // right, and symmetric insets clipped the first pill —
+            // like/dislike — against the edge it starts on.
+            padding: const EdgeInsetsDirectional.fromSTEB(12, 6, 12, 6),
             children: [
               _LikeDislikePill(item: item, liked: isFavorite.value ?? false),
               _ActionPill(
@@ -1977,18 +2061,6 @@ class _WatchDetails extends ConsumerWidget {
                   ref.read(libraryActionsProvider).toggleWatchLater(item);
                 },
               ),
-              _ActionPill(
-                icon: Icons.comment_outlined,
-                // YouTube prints the section total on the pill itself.
-                label: switch (
-                    ref.watch(commentCountProvider(item.videoId)).valueOrNull) {
-                  final count? => '${l10n.comments}  $count',
-                  _ => l10n.comments,
-                },
-                // A sheet, so the video keeps playing above it instead
-                // of being replaced by a page.
-                onTap: () => showCommentsSheet(context, item.videoId),
-              ),
               if (item.isLive)
                 _ActionPill(
                   icon: Icons.chat_bubble_outline,
@@ -1999,7 +2071,9 @@ class _WatchDetails extends ConsumerWidget {
           ),
         ),
 
-        const Divider(height: 20),
+        // YouTube separates these blocks with space and rounded cards,
+        // not with rules. The grey lines read as a settings list.
+        const SizedBox(height: 4),
 
         // Channel row
         ListTile(
@@ -2047,13 +2121,11 @@ class _WatchDetails extends ConsumerWidget {
 
         // Description
         if (item.description != null && item.description!.isNotEmpty)
-          _DescriptionBlock(
-            description: item.description!,
-            expanded: descriptionExpanded,
-            onToggle: onToggleDescription,
-          ),
+          _DescriptionCard(item: item),
 
-        const Divider(height: 20),
+        // Comments get a card of their own, the way YouTube shows them:
+        // the top comment visible without a tap, the thread one tap away.
+        _CommentsCard(videoId: item.videoId),
 
         // Chapters — tap to jump, like YouTube's chapter list.
         if (item.chapters.isNotEmpty) ...[
@@ -2082,7 +2154,7 @@ class _WatchDetails extends ConsumerWidget {
               },
             ),
           ),
-          const Divider(height: 20),
+          const SizedBox(height: 8),
         ],
 
         // Suggestions
@@ -2098,17 +2170,15 @@ class _WatchDetails extends ConsumerWidget {
                 .toList();
             return Column(
               children: [
+                // No fixed height: the horizontal card sizes itself
+                // from its thumbnail and however many lines the title
+                // takes. Pinning it clipped the taller ones.
                 for (final video in items)
-                  SizedBox(
-                    // Fits the 90px thumbnail plus the three-line text
-                    // column the horizontal card lays out beside it.
-                    height: 122,
-                    child: VideoCard(
-                      item: video,
-                      isHorizontal: true,
-                      onTap: () => context.pushReplacement(
-                        '/player/${video.videoId}',
-                      ),
+                  VideoCard(
+                    item: video,
+                    isHorizontal: true,
+                    onTap: () => context.pushReplacement(
+                      '/player/${video.videoId}',
                     ),
                   ),
               ],
@@ -2126,6 +2196,241 @@ class _WatchDetails extends ConsumerWidget {
   }
 }
 
+/// YouTube's description card: two lines and a "more", opening the full
+/// text in a sheet so the video keeps playing above it.
+///
+/// It used to expand in place through setState on the player screen —
+/// the same setState that stops rebuilding once fullscreen has been
+/// entered. A sheet has no such dependency.
+class _DescriptionCard extends StatelessWidget {
+  const _DescriptionCard({required this.item});
+
+  final MediaItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final description = item.description ?? '';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      child: Material(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: theme.brightness == Brightness.dark ? 0.35 : 1,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => showDescriptionSheet(context, item),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  l10n.showMore,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The full description, its chapters, and the counts YouTube puts at
+/// the top of the same sheet.
+Future<void> showDescriptionSheet(BuildContext context, MediaItem item) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (context) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        final theme = Theme.of(context);
+        final l10n = AppLocalizations.of(context);
+        return ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.description,
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: l10n.close,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            Text(
+              item.title,
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            if ((item.description ?? '').isNotEmpty)
+              _DescriptionBlock(
+                description: item.description!,
+                expanded: true,
+              ),
+            if (item.chapters.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                l10n.chapters,
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              for (final chapter in item.chapters)
+                Consumer(
+                  builder: (context, ref, _) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(chapter.title),
+                    trailing: Text(DurationFormatter.format(chapter.start)),
+                    onTap: () {
+                      ref
+                          .read(playerControllerProvider.notifier)
+                          .seek(chapter.start);
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ),
+            ],
+          ],
+        );
+      },
+    ),
+  );
+}
+
+/// YouTube's comments card: the top comment, tappable into the thread.
+///
+/// It states a load failure rather than showing an empty thread: an
+/// empty list has to mean "nobody has commented", never "the request
+/// failed".
+class _CommentsCard extends ConsumerWidget {
+  const _CommentsCard({required this.videoId});
+
+  final String videoId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final comments = ref.watch(commentsFeedProvider(videoId));
+
+    final Widget body = switch (comments) {
+      AsyncData(:final value) when value.items.isNotEmpty => Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              radius: 14,
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+              backgroundImage: value.items.first.authorAvatarUrl != null
+                  ? CachedNetworkImageProvider(value.items.first.authorAvatarUrl!)
+                  : null,
+              child: value.items.first.authorAvatarUrl == null
+                  ? Text(
+                      value.items.first.author.isNotEmpty
+                          ? value.items.first.author.characters.first.toUpperCase()
+                          : '?',
+                      style: const TextStyle(fontSize: 12),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                value.items.first.content,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      AsyncData() => Text(l10n.noComments, style: theme.textTheme.bodyMedium),
+      AsyncError() => Row(
+          children: [
+            Icon(Icons.error_outline, size: 18, color: theme.colorScheme.error),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                l10n.commentsUnavailable,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.error),
+              ),
+            ),
+          ],
+        ),
+      _ => const SizedBox(
+          height: 18,
+          width: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+    };
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Material(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: theme.brightness == Brightness.dark ? 0.35 : 1,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => showCommentsSheet(context, videoId),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  switch (comments.valueOrNull?.totalCountText) {
+                    final count? => '${l10n.comments}  $count',
+                    _ => l10n.comments,
+                  },
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                body,
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The description, with its timestamps turned into jump links.
 ///
 /// Long uploads carry their own chapter list in the description — a
@@ -2135,12 +2440,10 @@ class _DescriptionBlock extends ConsumerStatefulWidget {
   const _DescriptionBlock({
     required this.description,
     required this.expanded,
-    required this.onToggle,
   });
 
   final String description;
   final bool expanded;
-  final VoidCallback onToggle;
 
   @override
   ConsumerState<_DescriptionBlock> createState() => _DescriptionBlockState();
@@ -2175,7 +2478,6 @@ class _DescriptionBlockState extends ConsumerState<_DescriptionBlock> {
   Widget build(BuildContext context) {
     final description = widget.description;
     final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context);
     final baseStyle = theme.textTheme.bodySmall;
     final linkStyle = baseStyle?.copyWith(
       color: theme.colorScheme.primary,
@@ -2217,16 +2519,6 @@ class _DescriptionBlockState extends ConsumerState<_DescriptionBlock> {
             maxLines: widget.expanded ? null : 3,
             overflow:
                 widget.expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-          ),
-          InkWell(
-            onTap: widget.onToggle,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Text(
-                widget.expanded ? l10n.showLess : l10n.showMore,
-                style: baseStyle?.copyWith(fontWeight: FontWeight.w600),
-              ),
-            ),
           ),
         ],
       ),

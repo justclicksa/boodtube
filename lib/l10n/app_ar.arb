@@ -366,6 +366,8 @@
     }
   },
   "noComments": "لا توجد تعليقات بعد",
+  "commentsUnavailable": "تعذّر تحميل التعليقات",
+  "description": "الوصف",
   "noCommentsSubtitle": "كن أول من يعلّق",
   "unsubscribed": "تم إلغاء الاشتراك",
   "noVideos": "لا توجد مقاطع",

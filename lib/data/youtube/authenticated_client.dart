@@ -40,6 +40,13 @@ typedef HistoryEntry = ({MediaItem item, int? percentWatched});
 typedef GuideEntry = ({String title, String browseId, String? iconType});
 
 /// One page of a feed plus the continuation that fetches the next one.
+/// One page of a feed plus the continuation that fetches the next one.
+///
+/// There is deliberately no reload token here. YouTube's own
+/// pull-to-refresh sends reloadContinuationData, but the TV surface's
+/// response does not carry one — measured on device, and asking for
+/// FEwhat_to_watch again just returns the set already cached for the
+/// account. Refreshing continues the feed instead.
 typedef FeedPage = ({List<MediaItem> items, String? continuation});
 
 typedef LiveChatPage = ({
@@ -65,12 +72,20 @@ class AuthenticatedInnerTubeClient {
   static const _base = 'https://www.youtube.com/youtubei/v1';
 
   /// The TV client — the surface these OAuth tokens are issued for.
+  ///
+  /// No hl/gl. Sending them made YouTube answer every browse with 400
+  /// INVALID_ARGUMENT, which read as an empty home feed, no
+  /// subscriptions and no history all at once. Measured on device by
+  /// varying one field at a time: with the locale 400, without it 200,
+  /// and the api-format header made no difference either way.
+  ///
+  /// They were there to personalise recommendations by language. That
+  /// is not lost: these calls carry the account's own bearer token, and
+  /// YouTube already personalises by the language set on the account.
   Map<String, dynamic> get _context => {
         'client': {
           'clientName': 'TVHTML5',
           'clientVersion': '7.20250101.10.00',
-          'hl': _locale,
-          'gl': _locale == 'ar' ? 'SA' : 'US',
         },
       };
 
@@ -86,30 +101,47 @@ class AuthenticatedInnerTubeClient {
     debugPrint('InnerTube $endpoint: sending authenticated request');
 
     try {
-      final response = await _dio.post<Map<String, dynamic>>(
-        '$_base/$endpoint',
-        data: {'context': _context, ...body},
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Format-Version': '1',
-            // Identify as the TV surface these tokens belong to.
-            'User-Agent': 'Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version',
-          },
-          // InnerTube answers 4xx with a JSON body worth reading.
-          validateStatus: (status) => status != null && status < 500,
-        ),
-      );
+      final response = await _send(endpoint, body, token);
       if (response.statusCode != 200) {
         debugPrint('InnerTube $endpoint -> ${response.statusCode}');
+        // The 4xx body is the only thing that says *why*, and it used
+        // to be discarded with the response.
+        final error = response.data?['error'];
+        if (error is Map) {
+          debugPrint('InnerTube $endpoint: ${error['status']} '
+              '${error['message']}');
+        }
         return null;
       }
+      // Surface first: the label is a long continuation token on paged
+      // calls and pushed the answer off the end of the line.
       return response.data;
     } on DioException catch (e) {
       debugPrint('InnerTube $endpoint failed: ${e.message}');
       return null;
     }
+  }
+
+  Future<Response<Map<String, dynamic>>> _send(
+    String endpoint,
+    Map<String, dynamic> body,
+    String token,
+  ) {
+    return _dio.post<Map<String, dynamic>>(
+      '$_base/$endpoint',
+      data: {'context': _context, ...body},
+      options: Options(
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Format-Version': '1',
+          // Identify as the TV surface these tokens belong to.
+          'User-Agent': 'Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version',
+        },
+        // InnerTube answers 4xx with a JSON body worth reading.
+        validateStatus: (status) => status != null && status < 500,
+      ),
+    );
   }
 
   /// True while a token can be obtained — i.e. the account is usable.
@@ -209,7 +241,10 @@ class AuthenticatedInnerTubeClient {
     final videos = _extractVideos(data);
     debugPrint('InnerTube subscriptions: ${videos.length} videos '
         '(response keys: ${data.keys.take(8).join(",")})');
-    return (items: videos, continuation: _continuationToken(data));
+    return (
+      items: videos,
+      continuation: _continuationToken(data),
+    );
   }
 
   /// The personalised home feed.
@@ -248,9 +283,10 @@ class AuthenticatedInnerTubeClient {
     if (data == null) return null;
     return (
       items: _extractVideos(data),
-      continuation: _continuationToken(data)
+      continuation: _continuationToken(data),
     );
   }
+
 
   /// The token that fetches the next page of a feed, wherever YouTube
   /// happens to have put it in this response shape.
@@ -430,7 +466,10 @@ class AuthenticatedInnerTubeClient {
     if (data == null) return null;
     final videos = _extractVideos(data);
     debugPrint('InnerTube browse $browseId: ${videos.length} videos');
-    return (items: videos, continuation: _continuationToken(data));
+    return (
+      items: videos,
+      continuation: _continuationToken(data),
+    );
   }
 
   /// Search, through InnerTube rather than by scraping the results page.
@@ -458,7 +497,10 @@ class AuthenticatedInnerTubeClient {
     if (data == null) return null;
     final videos = _extractVideos(data);
     debugPrint('InnerTube search "$query": ${videos.length} videos');
-    return (items: videos, continuation: _continuationToken(data));
+    return (
+      items: videos,
+      continuation: _continuationToken(data),
+    );
   }
 
   /// The channels the user actually subscribes to on YouTube.

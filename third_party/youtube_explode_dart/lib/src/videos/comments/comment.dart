@@ -34,5 +34,13 @@ abstract class Comment with _$Comment {
     /// Used internally.
     /// Shouldn't be used in the code.
     @internal String? continuation,
+
+    /// BOODTUBE PATCH: the author's avatar. The entity payload YouTube
+    /// sends now carries avatarThumbnailUrl, and the parser was already
+    /// reading it with nowhere to put it — a comment list without faces
+    /// does not look like YouTube's.
+    ///
+    /// Optional and last so every existing call site still compiles.
+    String? authorAvatarUrl,
   ) = _Comment;
 }
