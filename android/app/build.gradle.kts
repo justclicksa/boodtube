@@ -46,6 +46,17 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+
+            // R8 stays off, the way SmartTube itself keeps it off for these
+            // very modules. It is not only the three missing-class warnings
+            // it reports (slf4j's binder, dnsjava's NameService): youtubeapi
+            // drives YouTube through Retrofit interfaces and reads models
+            // reflectively, and ExoPlayer loads its extension renderers by
+            // name, so a shrunk build can install cleanly and then fail to
+            // resolve a single stream. Dart code is still obfuscated by
+            // --obfuscate, which is a separate pass.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
