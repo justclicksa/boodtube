@@ -185,6 +185,13 @@ abstract class PlayerEngine {
   /// pointed at a URL through [openDirect].
   bool get resolvesStreamsNatively;
 
+  /// True when the engine asks the platform for audio focus itself, so
+  /// nothing else in the app may ask on its behalf. Android grants focus
+  /// per app: a second request from our own audio session is delivered to
+  /// the engine as AUDIOFOCUS_LOSS, and it stops playing a second after
+  /// the first frame.
+  bool get managesAudioFocus;
+
   // ============================================================
   // Lifecycle
   // ============================================================

@@ -525,7 +525,9 @@ class PlayerController extends StateNotifier<PlayerStateData>
                 showReplay: false,
               )
             : state.copyWith(isPlaying: false);
-        if (playing) unawaited(_claimAudioSession());
+        if (playing && !_engine.managesAudioFocus) {
+          unawaited(_claimAudioSession());
+        }
       }))
       ..add(_engine.tracks.listen(_onTracks))
       ..add(_engine.format.listen(_onFormat))

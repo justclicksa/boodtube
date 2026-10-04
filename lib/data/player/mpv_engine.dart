@@ -111,6 +111,11 @@ class MpvEngine implements PlayerEngine {
   @override
   bool get resolvesStreamsNatively => false;
 
+  @override
+  // libmpv plays into whatever session the app holds; the controller has
+  // to claim one for it.
+  bool get managesAudioFocus => false;
+
   /// Nothing to bring up: the [Player] is created in main() and shared
   /// with the audio handler, and the video output is attached lazily by
   /// [buildSurface].

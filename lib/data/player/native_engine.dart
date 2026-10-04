@@ -81,6 +81,10 @@ class NativeEngine implements PlayerEngine {
   bool get resolvesStreamsNatively => true;
 
   @override
+  // ExoPlayer runs its own AudioFocusManager.
+  bool get managesAudioFocus => true;
+
+  @override
   Future<void> initialize() => _initializing ??= _create();
 
   Future<void> _create() async {

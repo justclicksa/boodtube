@@ -265,6 +265,10 @@ class FakePlayerEngine implements PlayerEngine {
   bool get resolvesStreamsNatively => switchesInPlace;
 
   @override
+  // The native engine is the one that holds audio focus itself.
+  bool get managesAudioFocus => switchesInPlace;
+
+  @override
   Future<void> initialize() async => calls.add('initialize');
 
   @override
