@@ -182,25 +182,35 @@ reasons for moving off `vo=mediacodec_embed`.
 
 ## Known gaps
 
-- **Live streams do not play, on either engine.** On the native engine
-  MediaServiceCore's `getFormatInfo` returns `null` for every live id
-  tried (`jfKfPfyJRdk`, `21X5lGlDOfg`), so the format ladder is never
-  reached: `open jfKfPfyJRdk failed: resolve_failed: No format info for
-  this video`. On mpv the same ids reach the error screen too, so this is
-  **not** a regression from the engine work — but it does mean the live
-  path is unverified end to end. The next thing to look at is
-  `YouTubeMediaItemService.getFormatInfo`, which returns null when
-  `getVideoInfoService().getVideoInfo()` does; SmartTube itself may be
-  passing the `clickTrackingParams` overload, or relying on
-  initialisation this integration does not perform.
+- ~~Live streams do not play~~ **Live plays on the native engine.**
+  Verified on an emulator on 2026-10-04 from the drawer's Live row:
+  `open DS0ND2OlnJY: source=dash live=true` followed by `format now:
+  1080p avc`, with picture on screen. The ids this was first tried with
+  (`jfKfPfyJRdk`, `21X5lGlDOfg`) had presumably ended by then — a
+  finished broadcast is what makes `getFormatInfo` return null, not the
+  live path itself.
+- **mpv cannot play anything on Android.** Switching Video engine to
+  libmpv and restarting leaves every open failing with `stream: Failed to
+  open http://127.0.0.1:<port>/s0` — video, audio and subtitle routes
+  alike — while the relay itself answers correctly when queried over
+  `adb forward` (`206 Partial Content`, right `content-range`). So the
+  server is up and serving; it is mpv's own open that fails. This matters
+  beyond Android: **mpv is the engine iOS ships**, so the iOS build must
+  be exercised on a device before anything is uploaded.
 - **Subtitles are unverified on the native engine.** The caption list in
   the picker comes from the Dart metadata, while selection goes to
   ExoPlayer's text renderer as a group override. None of the videos used
   for verification carried captions, so the two halves have not been seen
   working together.
-- **Picture-in-picture is unverified on the native engine.** It is
-  untouched by this change and the surface is a Flutter texture either
-  way, but it was not exercised.
+- ~~Picture-in-picture is unverified~~ **PiP works on the native
+  engine**, both from the player's own button and automatically on Home
+  while playing, with live frames in the floating window.
+- **There is no media notification on the native engine.** The shade
+  carries nothing for BoodTube while ExoPlayer plays, because
+  `SmartTubeAudioHandler` still drives the idle media_kit player. Audio
+  does continue in the background (an active `AudioTrack` for the app
+  outlives Home), but the lock screen and the notification offer no
+  transport controls, and nothing holds a foreground service.
 - **The caption presets do not reach the native engine.** `SubtitleStyle`
   maps onto media_kit's `SubtitleViewConfiguration`; ExoPlayer draws its
   own captions on the platform side and ignores it.

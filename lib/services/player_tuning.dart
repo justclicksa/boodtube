@@ -93,6 +93,12 @@ class BufferTuning {
   /// likes: the byte ceilings before the seconds that depend on them.
   Map<String, String> get mpvProperties => {
         'cache': 'yes',
+        // Memory only. A disk cache wants a writable cache-dir mpv has
+        // not been given on Android, where it logs "Failed to create
+        // file cache" on every open. Silencing that did not fix mpv
+        // playback there (see docs/UNIFIED_PLAYER.md), but the cache this
+        // tuning sizes is meant to live in memory regardless.
+        'cache-on-disk': 'no',
         'demuxer-max-bytes': '$maxBytes',
         'demuxer-max-back-bytes': '$maxBackBytes',
         'cache-secs': '$cacheSecs',
